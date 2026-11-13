@@ -1,0 +1,278 @@
+basePath: /
+definitions:
+  models.CreateItineraryRequest:
+    properties:
+      group_name:
+        example: Smith Family Safari
+        type: string
+      guests:
+        items:
+          $ref: '#/definitions/models.GuestInput'
+        type: array
+      id:
+        example: ITIN-2026-001
+        type: string
+      stops:
+        items:
+          $ref: '#/definitions/models.StopInput'
+        type: array
+    type: object
+  models.ErrorResponse:
+    properties:
+      details:
+        type: string
+      error:
+        example: invalid request body
+        type: string
+    type: object
+  models.Guest:
+    properties:
+      allergies:
+        example: Peanut (Severe Anaphylaxis), Shellfish
+        type: string
+      dietary_requirements:
+        example: Strict Vegetarian
+        type: string
+      id:
+        example: 1
+        type: integer
+      itinerary_id:
+        example: ITIN-2026-001
+        type: string
+      name:
+        example: Alice Smith
+        type: string
+    type: object
+  models.GuestInput:
+    properties:
+      allergies:
+        example: Peanut (Severe Anaphylaxis), Shellfish
+        type: string
+      dietary_requirements:
+        example: Strict Vegetarian
+        type: string
+      name:
+        example: Alice Smith
+        type: string
+    type: object
+  models.HealthResponse:
+    properties:
+      status:
+        example: OK
+        type: string
+      timestamp:
+        example: "2026-11-13T19:50:00Z"
+        type: string
+    type: object
+  models.Itinerary:
+    properties:
+      created_at:
+        example: "2026-11-13T12:00:00Z"
+        type: string
+      group_name:
+        example: Smith Family Safari
+        type: string
+      guests:
+        items:
+          $ref: '#/definitions/models.Guest'
+        type: array
+      id:
+        example: ITIN-2026-001
+        type: string
+      stops:
+        items:
+          $ref: '#/definitions/models.Stop'
+        type: array
+      updated_at:
+        example: "2026-11-13T12:00:00Z"
+        type: string
+    type: object
+  models.Stop:
+    properties:
+      check_in_date:
+        example: "2026-12-01"
+        type: string
+      chef_confirmed:
+        example: false
+        type: boolean
+      chef_phone:
+        example: "+254711223344"
+        type: string
+      id:
+        example: 1
+        type: integer
+      itinerary_id:
+        example: ITIN-2026-001
+        type: string
+      lodge_name:
+        example: Mara Bush Camp
+        type: string
+      notification_sent:
+        example: false
+        type: boolean
+    type: object
+  models.StopInput:
+    properties:
+      check_in_date:
+        example: "2026-12-01"
+        type: string
+      chef_phone:
+        example: "+254711223344"
+        type: string
+      lodge_name:
+        example: Mara Bush Camp
+        type: string
+    type: object
+  models.UpdateGuestsRequest:
+    properties:
+      guests:
+        items:
+          $ref: '#/definitions/models.GuestInput'
+        type: array
+    type: object
+host: localhost:8080
+info:
+  contact:
+    email: support@dineware.local
+    name: DineWare API Support
+  description: Backend workflow manager handling staggered Africa's Talking dispatches
+    and guest allergy synchronization for safari lodges.
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+  termsOfService: http://swagger.io/terms/
+  title: DineWare API Engine
+  version: "1.0"
+paths:
+  /api/v1/itineraries:
+    get:
+      description: Retrieves multi-lodge itineraries including guest allergy and dietary
+        manifests.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.Itinerary'
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: List all safari itineraries
+      tags:
+      - itineraries
+    post:
+      consumes:
+      - application/json
+      description: Allows tour operators to register groups, multi-lodge stops, and
+        protected guest allergy manifests.
+      parameters:
+      - description: Itinerary registration payload
+        in: body
+        name: itinerary
+        required: true
+        schema:
+          $ref: '#/definitions/models.CreateItineraryRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.Itinerary'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Create a new safari itinerary
+      tags:
+      - itineraries
+  /api/v1/itineraries/{id}:
+    get:
+      description: Retrieves a specific itinerary with all stops and guest dietary
+        manifests.
+      parameters:
+      - description: Itinerary ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Itinerary'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Get safari itinerary by ID
+      tags:
+      - itineraries
+  /api/v1/itineraries/{id}/guests:
+    patch:
+      consumes:
+      - application/json
+      description: Dynamically updates the guest allergy manifest and count for an
+        active multi-lodge itinerary.
+      parameters:
+      - description: Itinerary ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Updated guests payload
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/models.UpdateGuestsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Itinerary'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Update guest count or allergies mid-trip
+      tags:
+      - itineraries
+  /health:
+    get:
+      description: Returns 200 OK if service is up and running.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.HealthResponse'
+      summary: Health Check
+      tags:
+      - system
+swagger: "2.0"

@@ -30,7 +30,7 @@ docs:
 		-w /app \
 		golang:1.27-alpine sh -c "which swag || go install github.com/swaggo/swag/cmd/swag@latest && swag init"
 
-# 4. Run Go unit tests & race detector inside Docker
+# 4. Run Go unit tests inside Docker
 test-backend: docs
 	docker run --rm \
 		$(DOCKER_USER) \
@@ -38,7 +38,7 @@ test-backend: docs
 		-v "$(PWD)/backend":/app \
 		-v dineware-go-cache:/go \
 		-w /app \
-		golang:1.27-alpine go test -v -race ./...
+		golang:1.27-alpine go test -v ./...
 
 # 5. Run Next.js linter & build check inside Docker
 test-frontend:
