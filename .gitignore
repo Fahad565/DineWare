@@ -1,0 +1,25 @@
+# Go
+/backend/dineware-engine
+*.exe
+*.test
+*.out
+
+# Node.js and Next.js
+node_modules/
+.next/
+out/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# IDE and editor files
+.idea/
+.vscode/
+*.iml
+*.swp
+*.swo
+
+# System skills
+skills/

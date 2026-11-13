@@ -1,0 +1,31 @@
+services:
+  - type: web
+    name: dineware-backend-engine
+    runtime: docker
+    dockerContext: ./backend
+    dockerfilePath: ./backend.Dockerfile
+    plan: free
+    envVars:
+      - key: PORT
+        value: 8080
+      - key: DATABASE_URL
+        sync: false
+      - key: AT_USERNAME
+        sync: false
+      - key: AT_API_KEY
+        sync: false
+
+  - type: web
+    name: dineware-operator-portal
+    runtime: docker
+    dockerContext: ./frontend
+    dockerfilePath: ./frontend.Dockerfile
+    plan: free
+    envVars:
+      - key: PORT
+        value: 3000
+      - key: NEXT_PUBLIC_API_URL
+        fromService:
+          type: web
+          name: dineware-backend-engine
+          property: host

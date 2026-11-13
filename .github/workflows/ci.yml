@@ -1,0 +1,65 @@
+name: DineWare CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  backend-ci:
+    name: Backend CI
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.27"
+
+      - name: Install Swagger generator
+        run: go install github.com/swaggo/swag/cmd/swag@latest
+
+      - name: Check generated API docs
+        working-directory: backend
+        run: |
+          swag init
+          git diff --exit-code -- docs/
+
+      - name: Format Go code
+        working-directory: backend
+        run: |
+          go fmt ./...
+          git diff --exit-code
+
+      - name: Run Go tests
+        working-directory: backend
+        run: go test -v -race ./...
+
+  frontend-ci:
+    name: Frontend CI
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Run lint
+        working-directory: frontend
+        run: npm run lint
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
