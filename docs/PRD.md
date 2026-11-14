@@ -37,4 +37,4 @@ DineWare is an offline-first dietary and itinerary synchronization engine built 
 • Zero-Data Reliability: Core kitchen alerting and manifest lookup must run 100% over GSM signaling channels (SMS and USSD), requiring 0 Kbps of internet bandwidth.
 • Privacy & Health Data Protection: Sensitive dietary/allergy records are treated as protected health-related information and are strictly gated behind authenticated USSD sessions or secured HTTPS web endpoints.
 • Low USSD Latency: USSD menu responses must compile and return within 2.5 seconds to prevent telco gateway session timeouts.
-• Containerized Portability: Both the Next.js frontend and Golang 1.27 backend must run as reproducible Docker containers backed by Neon PostgreSQL and deployed via Render (render.yaml).
+• Containerized Portability: Both the Next.js frontend and Golang 1.22 backend must run as reproducible Docker containers backed by Neon PostgreSQL and deployed via Render (render.yaml).

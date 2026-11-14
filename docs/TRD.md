@@ -219,10 +219,10 @@ To support this continuous delivery workflow, here are the production-ready Dock
 
 🐳 1. Backend Dockerfile (backend.Dockerfile)
 
-This implements a secure, multi-stage build optimized for Go 1.27. It compiles a lean binary inside a lightweight Alpine build layer and copies it into a minimal scratch layer to keep your Render build times extremely low.
+This implements a secure, multi-stage build optimized for Go 1.22. It compiles a lean binary inside a lightweight Alpine build layer and copies it into a minimal scratch layer to keep your Render build times extremely low.
 dockerfile
 # --- Build Stage ---
-FROM golang:1.27-alpine AS builder
+FROM golang:1.22-alpine AS builder
 
 WORKDIR /app
 
@@ -288,7 +288,7 @@ Place this at the exact root of your repository. It instructs Render to build di
 yaml
 services:
   # -------------------------------------------------------------
-  # The DineWare API Core Engine (Golang v1.27)
+  # The DineWare API Core Engine (Golang v1.22)
   # -------------------------------------------------------------
   - type: web
     name: dineware-backend-engine
@@ -343,7 +343,7 @@ on:
 
 jobs:
   # -------------------------------------------------------------
-  # 1. Backend Verification Job (Golang 1.27)
+  # 1. Backend Verification Job (Golang 1.22)
   # -------------------------------------------------------------
   backend-ci:
     name: Go Core Engine Validation
@@ -352,10 +352,10 @@ jobs:
       - name: Checkout Source Code
         uses: actions/checkout@v4
 
-      - name: Set up Go 1.27 Environment
+      - name: Set up Go 1.22 Environment
         uses: actions/setup-go@v5
         with:
-          go-version: '1.27'
+          go-version: '1.22'
           cache-dependency-path: backend/go.sum
 
       - name: Install Tooling Dependencies
@@ -452,6 +452,4 @@ restart: down up
 # 6. Check the running status of your containers
 ps:
 	docker compose ps
-
-
 

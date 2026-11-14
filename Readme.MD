@@ -16,11 +16,10 @@ DineWare bridges the operational gap between connected safari tour operators and
 
 ## 🧰 Technology Stack
 * **Frontend:** Next.js (TypeScript) — Managed web platform for Tour Operators to register and manage guest vectors.
-* **Backend:** Golang (v1.27) — High-concurrency engine handling Africa's Talking integrations and database state machine routines.
+* **Backend:** Golang (v1.22) — High-concurrency engine handling Africa's Talking integrations and database state machine routines.
 * **Database:** Neon PostgreSQL — Serverless relational layer hosting live operational manifests and audit records.
 * **Communications Gateway:** Africa's Talking APIs (SMS & USSD pipelines).
 * **Environments:** GitHub Codespaces (Core Dev Environment) + Google Jules (Project Spin Up).
 * **Deployment System:** Render via `render.yaml` blueprints executing multi-stage Docker builds natively via `dockerContext`.
 
 ---
-

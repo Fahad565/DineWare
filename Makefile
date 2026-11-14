@@ -10,7 +10,7 @@ init-go:
 		-v "$(PWD)/backend":/app \
 		-v dineware-go-cache:/go \
 		-w /app \
-		golang:1.27-alpine go mod tidy
+		golang:1.22-alpine go mod tidy
 
 # 2. Install Node packages inside an ephemeral Node 20 container
 init-node:
@@ -28,7 +28,7 @@ docs:
 		-v "$(PWD)/backend":/app \
 		-v dineware-go-cache:/go \
 		-w /app \
-		golang:1.27-alpine sh -c "which swag || go install github.com/swaggo/swag/cmd/swag@latest && swag init"
+		golang:1.22-alpine sh -c "which swag || go install github.com/swaggo/swag/cmd/swag@latest && swag init"
 
 # 4. Run Go unit tests inside Docker
 test-backend: docs
@@ -37,7 +37,7 @@ test-backend: docs
 		-v "$(PWD)/backend":/app \
 		-v dineware-go-cache:/go \
 		-w /app \
-		golang:1.27-alpine sh -c "apk add --no-cache gcc musl-dev && go test -race -v ./..."
+		golang:1.22-alpine sh -c "apk add --no-cache gcc musl-dev && go test -race -v ./..."
 
 # 5. Run Next.js linter & build check inside Docker
 test-frontend:

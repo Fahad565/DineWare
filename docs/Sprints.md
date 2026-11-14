@@ -6,7 +6,7 @@ All feature implementation progress is logged sequentially under the `docs/sprin
 * **Goal:** Configure developer environment baselines and map Docker topologies.
 * **Deliverables:**
   * Initialize monorepo structure in GitHub Codespaces.
-  * Construct Next.js frontend scaffold and Golang v1.27 backend skeleton.
+  * Construct Next.js frontend scaffold and Golang v1.22 backend skeleton.
   * Formulate `render.yaml` Infrastructure-as-Code blueprint file.
   * Define localized `Dockerfile` configurations for both packages.
   * Establish connection pools to Neon PostgreSQL database.
