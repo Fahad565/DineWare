@@ -19,6 +19,9 @@ import (
 // this window and notification_sent = false will trigger an SMS dispatch.
 const DispatchWindow = 72 * time.Hour
 
+// DispatchStagger spaces outbound messages to avoid bursts at the SMS provider.
+const DispatchStagger = time.Second
+
 // PendingStop is a lightweight projection of itinerary_stops used by the dispatcher.
 // It contains ONLY the non-sensitive fields needed to build the privacy-safe SMS.
 type PendingStop struct {
@@ -91,8 +94,18 @@ func (d *Dispatcher) Run(ctx context.Context) error {
 		failed int
 	)
 
-	for _, stop := range stops {
-		// Staggered dispatch: short pause between messages to avoid AT rate-limit bursts
+	for i, stop := range stops {
+		if i > 0 {
+			// Space requests while remaining responsive to shutdown.
+			timer := time.NewTimer(DispatchStagger)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return ctx.Err()
+			case <-timer.C:
+			}
+		}
+
 		select {
 		case <-ctx.Done():
 			return ctx.Err()

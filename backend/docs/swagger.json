@@ -190,6 +190,76 @@
                 }
             }
         },
+        "/api/v1/ussd": {
+            "post": {
+                "description": "Processes an Africa's Talking USSD callback and returns a plain-text CON or END response.",
+                "consumes": [
+                    "application/x-www-form-urlencoded"
+                ],
+                "produces": [
+                    "text/plain"
+                ],
+                "tags": [
+                    "ussd"
+                ],
+                "summary": "USSD webhook",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "USSD session identifier",
+                        "name": "sessionId",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "USSD service code",
+                        "name": "serviceCode",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Subscriber phone number",
+                        "name": "phoneNumber",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Cumulative USSD input",
+                        "name": "text",
+                        "in": "formData"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "USSD response prefixed with CON or END",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid form data",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "405": {
+                        "description": "Method not allowed",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "503": {
+                        "description": "USSD service unavailable",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
         "/health": {
             "get": {
                 "description": "Returns 200 OK if service is up and running.",

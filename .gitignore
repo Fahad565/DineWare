@@ -27,3 +27,7 @@ out/
 
 # System skills
 skills/
+
+# Operating system files
+.DS_Store
+Thumbs.db

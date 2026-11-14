@@ -262,6 +262,54 @@ paths:
       summary: Update guest count or allergies mid-trip
       tags:
       - itineraries
+  /api/v1/ussd:
+    post:
+      consumes:
+      - application/x-www-form-urlencoded
+      description: Processes an Africa's Talking USSD callback and returns a plain-text
+        CON or END response.
+      parameters:
+      - description: USSD session identifier
+        in: formData
+        name: sessionId
+        required: true
+        type: string
+      - description: USSD service code
+        in: formData
+        name: serviceCode
+        required: true
+        type: string
+      - description: Subscriber phone number
+        in: formData
+        name: phoneNumber
+        required: true
+        type: string
+      - description: Cumulative USSD input
+        in: formData
+        name: text
+        type: string
+      produces:
+      - text/plain
+      responses:
+        "200":
+          description: USSD response prefixed with CON or END
+          schema:
+            type: string
+        "400":
+          description: Invalid form data
+          schema:
+            type: string
+        "405":
+          description: Method not allowed
+          schema:
+            type: string
+        "503":
+          description: USSD service unavailable
+          schema:
+            type: string
+      summary: USSD webhook
+      tags:
+      - ussd
   /health:
     get:
       description: Returns 200 OK if service is up and running.

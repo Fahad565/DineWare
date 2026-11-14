@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"testing"
+	"time"
 
 	"dineware-backend/models"
 )
@@ -92,5 +93,52 @@ func TestMemoryStoreCRUD(t *testing.T) {
 	}
 	if len(list) != 1 {
 		t.Fatalf("expected 1 itinerary in list, got %d", len(list))
+	}
+}
+
+func TestMemoryStoreUSSDAndDispatcherQueries(t *testing.T) {
+	ctx := context.Background()
+	store := NewMemoryStore()
+	checkIn := time.Now().Add(24 * time.Hour).Format("2006-01-02")
+	itinerary, err := store.CreateItinerary(ctx, models.CreateItineraryRequest{
+		GroupName: "Safari Group",
+		Stops: []models.StopInput{{
+			LodgeName: "Mara Lodge", ChefPhone: "+254700000001", CheckInDate: checkIn,
+		}},
+		Guests: []models.GuestInput{{Name: "Guest", Allergies: "None"}},
+	})
+	if err != nil {
+		t.Fatalf("create itinerary: %v", err)
+	}
+
+	stop, err := store.GetStopByItineraryAndPhone(ctx, itinerary.ID, "+254700000001")
+	if err != nil {
+		t.Fatalf("get USSD stop: %v", err)
+	}
+	if stop.GuestCount != 1 || stop.LodgeName != "Mara Lodge" {
+		t.Fatalf("unexpected USSD stop: %+v", stop)
+	}
+	guests, err := store.GetGuestsByItinerary(ctx, itinerary.ID)
+	if err != nil || len(guests) != 1 || guests[0].Name != "Guest" {
+		t.Fatalf("unexpected USSD guests: guests=%+v err=%v", guests, err)
+	}
+	if err := store.ConfirmManifest(ctx, itinerary.ID, "+254700000001"); err != nil {
+		t.Fatalf("confirm manifest: %v", err)
+	}
+	stop, err = store.GetStopByItineraryAndPhone(ctx, itinerary.ID, "+254700000001")
+	if err != nil || !stop.ChefConfirmed {
+		t.Fatalf("expected manifest confirmation, stop=%+v err=%v", stop, err)
+	}
+
+	pending, err := store.QueryPendingStops(ctx, 72*time.Hour)
+	if err != nil || len(pending) != 1 || pending[0].ItineraryID != itinerary.ID {
+		t.Fatalf("unexpected pending stops: stops=%+v err=%v", pending, err)
+	}
+	if err := store.MarkNotificationSent(ctx, pending[0].StopID); err != nil {
+		t.Fatalf("mark notification sent: %v", err)
+	}
+	pending, err = store.QueryPendingStops(ctx, 72*time.Hour)
+	if err != nil || len(pending) != 0 {
+		t.Fatalf("expected no pending stops after marking sent: stops=%+v err=%v", pending, err)
 	}
 }

@@ -33,12 +33,11 @@ docs:
 # 4. Run Go unit tests inside Docker
 test-backend: docs
 	docker run --rm \
-		$(DOCKER_USER) \
 		-e GOCACHE=/go/.cache \
 		-v "$(PWD)/backend":/app \
 		-v dineware-go-cache:/go \
 		-w /app \
-		golang:1.27-alpine go test -v ./...
+		golang:1.27-alpine sh -c "apk add --no-cache gcc musl-dev && go test -race -v ./..."
 
 # 5. Run Next.js linter & build check inside Docker
 test-frontend:

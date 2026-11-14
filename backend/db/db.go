@@ -37,6 +37,34 @@ type Store interface {
 	Close() error
 }
 
+// USSDStop and USSDGuest contain the database projections needed by the USSD handler.
+type USSDStop struct {
+	ItineraryID   string
+	GroupName     string
+	LodgeName     string
+	ChefPhone     string
+	CheckInDate   string
+	GuestCount    int
+	ChefConfirmed bool
+}
+
+type USSDGuest struct {
+	Name                string
+	Allergies           string
+	DietaryRequirements string
+}
+
+// PendingStop contains only the fields needed to send a privacy-safe notification.
+type PendingStop struct {
+	StopID      int
+	ItineraryID string
+	GroupName   string
+	ChefPhone   string
+	LodgeName   string
+	CheckInDate string
+	GuestCount  int
+}
+
 // Connect establishes a pooled connection to Neon PostgreSQL and executes migrations.
 func Connect(databaseURL string) (*sql.DB, error) {
 	if strings.TrimSpace(databaseURL) == "" {
@@ -415,11 +443,128 @@ func (s *PostgresStore) getGuestsForItinerary(ctx context.Context, itineraryID s
 	return guests, nil
 }
 
+// GetStopByItineraryAndPhone authenticates a chef and returns the itinerary stop.
+func (s *PostgresStore) GetStopByItineraryAndPhone(ctx context.Context, itineraryID, chefPhone string) (*USSDStop, error) {
+	query := `
+		SELECT i.id, i.group_name, st.lodge_name, st.chef_phone,
+		       TO_CHAR(st.check_in_date, 'YYYY-MM-DD'), COUNT(g.id), st.chef_confirmed
+		FROM itinerary_stops st
+		JOIN itineraries i ON i.id = st.itinerary_id
+		LEFT JOIN guests g ON g.itinerary_id = i.id
+		WHERE st.itinerary_id = $1 AND st.chef_phone = $2
+		GROUP BY i.id, i.group_name, st.id, st.lodge_name, st.chef_phone,
+		         st.check_in_date, st.chef_confirmed`
+	var stop USSDStop
+	if err := s.db.QueryRowContext(ctx, query, itineraryID, chefPhone).Scan(
+		&stop.ItineraryID, &stop.GroupName, &stop.LodgeName, &stop.ChefPhone,
+		&stop.CheckInDate, &stop.GuestCount, &stop.ChefConfirmed,
+	); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("query USSD stop: %w", err)
+	}
+	return &stop, nil
+}
+
+// GetGuestsByItinerary returns guest manifest data for an authenticated USSD session.
+func (s *PostgresStore) GetGuestsByItinerary(ctx context.Context, itineraryID string) ([]USSDGuest, error) {
+	query := `SELECT name, allergies, COALESCE(dietary_requirements, '') FROM guests WHERE itinerary_id = $1 ORDER BY id ASC`
+	rows, err := s.db.QueryContext(ctx, query, itineraryID)
+	if err != nil {
+		return nil, fmt.Errorf("query USSD guests: %w", err)
+	}
+	defer rows.Close()
+
+	var guests []USSDGuest
+	for rows.Next() {
+		var guest USSDGuest
+		if err := rows.Scan(&guest.Name, &guest.Allergies, &guest.DietaryRequirements); err != nil {
+			return nil, fmt.Errorf("scan USSD guest: %w", err)
+		}
+		guests = append(guests, guest)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate USSD guests: %w", err)
+	}
+	return guests, nil
+}
+
+// ConfirmManifest records receipt only for the stop authenticated by itinerary and phone.
+func (s *PostgresStore) ConfirmManifest(ctx context.Context, itineraryID, chefPhone string) error {
+	result, err := s.db.ExecContext(ctx,
+		`UPDATE itinerary_stops SET chef_confirmed = TRUE WHERE itinerary_id = $1 AND chef_phone = $2`,
+		itineraryID, chefPhone)
+	if err != nil {
+		return fmt.Errorf("confirm manifest: %w", err)
+	}
+	updated, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("check manifest confirmation: %w", err)
+	}
+	if updated == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// QueryPendingStops returns unnotified stops scheduled from today through the given horizon.
+func (s *PostgresStore) QueryPendingStops(ctx context.Context, within time.Duration) ([]PendingStop, error) {
+	cutoff := time.Now().Add(within).Format("2006-01-02")
+	query := `
+		SELECT st.id, i.id, i.group_name, st.chef_phone, st.lodge_name,
+		       TO_CHAR(st.check_in_date, 'YYYY-MM-DD'), COUNT(g.id)
+		FROM itinerary_stops st
+		JOIN itineraries i ON i.id = st.itinerary_id
+		LEFT JOIN guests g ON g.itinerary_id = i.id
+		WHERE st.notification_sent = FALSE
+		  AND st.check_in_date >= CURRENT_DATE
+		  AND st.check_in_date <= $1::date
+		GROUP BY st.id, i.id, i.group_name, st.chef_phone, st.lodge_name, st.check_in_date
+		ORDER BY st.check_in_date ASC, st.id ASC`
+	rows, err := s.db.QueryContext(ctx, query, cutoff)
+	if err != nil {
+		return nil, fmt.Errorf("query pending stops: %w", err)
+	}
+	defer rows.Close()
+
+	var stops []PendingStop
+	for rows.Next() {
+		var stop PendingStop
+		if err := rows.Scan(&stop.StopID, &stop.ItineraryID, &stop.GroupName, &stop.ChefPhone,
+			&stop.LodgeName, &stop.CheckInDate, &stop.GuestCount); err != nil {
+			return nil, fmt.Errorf("scan pending stop: %w", err)
+		}
+		stops = append(stops, stop)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate pending stops: %w", err)
+	}
+	return stops, nil
+}
+
+// MarkNotificationSent records successful notification delivery for a stop.
+func (s *PostgresStore) MarkNotificationSent(ctx context.Context, stopID int) error {
+	result, err := s.db.ExecContext(ctx, `UPDATE itinerary_stops SET notification_sent = TRUE WHERE id = $1`, stopID)
+	if err != nil {
+		return fmt.Errorf("mark notification sent: %w", err)
+	}
+	updated, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("check notification update: %w", err)
+	}
+	if updated == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 // MemoryStore implements an in-memory Store for testing and offline/local execution.
 type MemoryStore struct {
 	mu          sync.RWMutex
 	itineraries map[string]*models.Itinerary
 	nextID      int
+	nextStopID  int
 }
 
 // NewMemoryStore creates an empty MemoryStore.
@@ -427,6 +572,7 @@ func NewMemoryStore() *MemoryStore {
 	return &MemoryStore{
 		itineraries: make(map[string]*models.Itinerary),
 		nextID:      1,
+		nextStopID:  1,
 	}
 }
 
@@ -462,7 +608,7 @@ func (m *MemoryStore) CreateItinerary(ctx context.Context, req models.CreateItin
 	stops := make([]models.Stop, len(req.Stops))
 	for i, s := range req.Stops {
 		stops[i] = models.Stop{
-			ID:               i + 1,
+			ID:               m.nextStopID,
 			ItineraryID:      itinID,
 			LodgeName:        s.LodgeName,
 			ChefPhone:        s.ChefPhone,
@@ -470,6 +616,7 @@ func (m *MemoryStore) CreateItinerary(ctx context.Context, req models.CreateItin
 			NotificationSent: false,
 			ChefConfirmed:    false,
 		}
+		m.nextStopID++
 	}
 
 	guests := make([]models.Guest, len(req.Guests))
@@ -550,4 +697,108 @@ func (m *MemoryStore) UpdateGuests(ctx context.Context, itineraryID string, gues
 	it.UpdatedAt = time.Now().UTC()
 	copyIt := *it
 	return &copyIt, nil
+}
+
+func (m *MemoryStore) GetStopByItineraryAndPhone(_ context.Context, itineraryID, chefPhone string) (*USSDStop, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	it, ok := m.itineraries[itineraryID]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	for _, stop := range it.Stops {
+		if stop.ChefPhone == chefPhone {
+			return &USSDStop{
+				ItineraryID:   it.ID,
+				GroupName:     it.GroupName,
+				LodgeName:     stop.LodgeName,
+				ChefPhone:     stop.ChefPhone,
+				CheckInDate:   stop.CheckInDate,
+				GuestCount:    len(it.Guests),
+				ChefConfirmed: stop.ChefConfirmed,
+			}, nil
+		}
+	}
+	return nil, ErrNotFound
+}
+
+func (m *MemoryStore) GetGuestsByItinerary(_ context.Context, itineraryID string) ([]USSDGuest, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	it, ok := m.itineraries[itineraryID]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	guests := make([]USSDGuest, len(it.Guests))
+	for i, guest := range it.Guests {
+		guests[i] = USSDGuest{
+			Name:                guest.Name,
+			Allergies:           guest.Allergies,
+			DietaryRequirements: guest.DietaryRequirements,
+		}
+	}
+	return guests, nil
+}
+
+func (m *MemoryStore) ConfirmManifest(_ context.Context, itineraryID, chefPhone string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	it, ok := m.itineraries[itineraryID]
+	if !ok {
+		return ErrNotFound
+	}
+	for i := range it.Stops {
+		if it.Stops[i].ChefPhone == chefPhone {
+			it.Stops[i].ChefConfirmed = true
+			return nil
+		}
+	}
+	return ErrNotFound
+}
+
+func (m *MemoryStore) QueryPendingStops(_ context.Context, within time.Duration) ([]PendingStop, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	now := time.Now()
+	today := now.Format("2006-01-02")
+	cutoff := now.Add(within).Format("2006-01-02")
+	var pending []PendingStop
+	for _, it := range m.itineraries {
+		for _, stop := range it.Stops {
+			if stop.NotificationSent || stop.CheckInDate < today || stop.CheckInDate > cutoff {
+				continue
+			}
+			pending = append(pending, PendingStop{
+				StopID: stop.ID, ItineraryID: it.ID, GroupName: it.GroupName,
+				ChefPhone: stop.ChefPhone, LodgeName: stop.LodgeName,
+				CheckInDate: stop.CheckInDate, GuestCount: len(it.Guests),
+			})
+		}
+	}
+	sort.Slice(pending, func(i, j int) bool {
+		if pending[i].CheckInDate == pending[j].CheckInDate {
+			return pending[i].StopID < pending[j].StopID
+		}
+		return pending[i].CheckInDate < pending[j].CheckInDate
+	})
+	return pending, nil
+}
+
+func (m *MemoryStore) MarkNotificationSent(_ context.Context, stopID int) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	for _, it := range m.itineraries {
+		for i := range it.Stops {
+			if it.Stops[i].ID == stopID {
+				it.Stops[i].NotificationSent = true
+				return nil
+			}
+		}
+	}
+	return ErrNotFound
 }
