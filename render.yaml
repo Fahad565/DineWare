@@ -3,7 +3,7 @@ services:
     name: dineware-backend-engine
     runtime: docker
     dockerContext: ./backend
-    dockerfilePath: ./backend.Dockerfile
+    dockerfilePath: ./backend/backend.Dockerfile
     plan: free
     envVars:
       - key: PORT
@@ -19,7 +19,7 @@ services:
     name: dineware-operator-portal
     runtime: docker
     dockerContext: ./frontend
-    dockerfilePath: ./frontend.Dockerfile
+    dockerfilePath: ./frontend/frontend.Dockerfile
     plan: free
     envVars:
       - key: PORT
