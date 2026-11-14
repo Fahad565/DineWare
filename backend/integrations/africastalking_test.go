@@ -118,8 +118,8 @@ func TestSendSMSCallsATEndpoint(t *testing.T) {
 
 // stubProvider implements GuestManifestProvider for USSD state machine tests.
 type stubProvider struct {
-	stop   *integrations.StopRecord
-	guests []integrations.GuestRecord
+	stop       *integrations.StopRecord
+	guests     []integrations.GuestRecord
 	confirmErr error
 }
 

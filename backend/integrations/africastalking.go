@@ -161,12 +161,12 @@ type GuestManifestProvider interface {
 
 // StopRecord is a lightweight projection used by the USSD handler.
 type StopRecord struct {
-	ItineraryID  string
-	GroupName    string
-	LodgeName    string
-	ChefPhone    string
-	CheckInDate  string
-	GuestCount   int
+	ItineraryID   string
+	GroupName     string
+	LodgeName     string
+	ChefPhone     string
+	CheckInDate   string
+	GuestCount    int
 	ChefConfirmed bool
 }
 
