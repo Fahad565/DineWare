@@ -1,8 +1,12 @@
-# Go
+# Go binaries & build artifacts
 /backend/dineware-engine
 *.exe
 *.test
 *.out
+*.prof
+coverage.txt
+coverage.html
+/backend/vendor/
 
 # Node.js and Next.js
 node_modules/
