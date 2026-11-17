@@ -3,42 +3,17 @@
 @tailwind utilities;
 
 :root {
-  --foreground-rgb: 30, 41, 59;
-  --background-start-rgb: 250, 248, 245;
-  --background-end-rgb: 245, 243, 236;
+  --foreground-rgb: 41, 37, 36;
+  --background-start-rgb: 250, 249, 246;
+  --background-end-rgb: 250, 249, 246;
 }
 
 body {
   color: rgb(var(--foreground-rgb));
-  background: linear-gradient(
-      to bottom,
-      transparent,
-      rgb(var(--background-end-rgb))
-    )
-    rgb(var(--background-start-rgb));
+  background: rgb(var(--background-start-rgb));
   min-height: 100vh;
 }
 
-/* Safari Badge & Custom Highlights */
-.badge-pending {
-  background-color: #fef3c7;
-  color: #92400e;
-  border-color: #fcd34d;
-}
-
-.badge-sms-sent {
-  background-color: #e0f2fe;
-  color: #0369a1;
-  border-color: #7dd3fc;
-}
-
-.badge-confirmed {
-  background-color: #dcfce7;
-  color: #15803d;
-  border-color: #86efac;
-}
-
-/* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;

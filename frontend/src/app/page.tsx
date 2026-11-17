@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import {
   Plus,
@@ -8,26 +8,56 @@ import {
   Filter,
   Users,
   Building2,
-  ShieldAlert,
-  CheckCircle2,
   Calendar,
   Phone,
-  Clock,
   ArrowRight,
-  Sparkles,
   ExternalLink,
   Edit3,
   Copy,
   Check,
-  Radio,
   RefreshCw,
   UtensilsCrossed,
+  AlertTriangle,
+  ShieldAlert,
 } from 'lucide-react';
-import { Itinerary, getStopStatus, getStatusLabel, StopStatus } from '../types/itinerary';
+import { Itinerary, getStopStatus } from '../types/itinerary';
 import { fetchItineraries, checkBackendHealth } from '../lib/api';
 import { StatusBadge } from '../components/StatusBadge';
 import { CreateItineraryModal } from '../components/CreateItineraryModal';
 import { EditGuestsModal } from '../components/EditGuestsModal';
+
+function formatCheckInDate(value: string) {
+  const date = new Date(`${value}T12:00:00`);
+  if (Number.isNaN(date.getTime())) return value;
+
+  return new Intl.DateTimeFormat('en', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(date);
+}
+
+function hasSevereAllergy(allergies: string) {
+  const lower = allergies.toLowerCase();
+  return (
+    lower.includes('anaphylaxis') ||
+    lower.includes('peanut') ||
+    lower.includes('severe') ||
+    lower.includes('celiac')
+  );
+}
+
+function countMealNotes(itinerary: Itinerary) {
+  return itinerary.guests.filter((guest) => (
+    (guest.allergies && guest.allergies !== 'None') ||
+    (guest.dietary_requirements &&
+      !['standard', 'standard safari menu'].includes(guest.dietary_requirements.toLowerCase()))
+  )).length;
+}
+
+function countSevereAllergies(itinerary: Itinerary) {
+  return itinerary.guests.filter((guest) => hasSevereAllergy(guest.allergies || '')).length;
+}
 
 export default function OperatorDashboard() {
   const [itineraries, setItineraries] = useState<Itinerary[]>([]);
@@ -43,6 +73,8 @@ export default function OperatorDashboard() {
   const [editingItinerary, setEditingItinerary] = useState<Itinerary | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [propagationToast, setPropagationToast] = useState<string | null>(null);
+  const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Load itineraries & test backend connection
   const loadData = React.useCallback(async () => {
@@ -65,6 +97,13 @@ export default function OperatorDashboard() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    return () => {
+      if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+      if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+    };
+  }, []);
 
   // Filtered list
   const filteredItineraries = useMemo(() => {
@@ -96,15 +135,7 @@ export default function OperatorDashboard() {
       totalStops += it.stops.length;
       confirmedStops += it.stops.filter((s) => s.chef_confirmed).length;
       totalGuests += it.guests.length;
-      severeAllergies += it.guests.filter((g) => {
-        const lower = g.allergies.toLowerCase();
-        return (
-          lower.includes('anaphylaxis') ||
-          lower.includes('peanut') ||
-          lower.includes('severe') ||
-          lower.includes('celiac')
-        );
-      }).length;
+      severeAllergies += countSevereAllergies(it);
     });
 
     const confirmationRate = totalStops > 0 ? Math.round((confirmedStops / totalStops) * 100) : 0;
@@ -118,169 +149,130 @@ export default function OperatorDashboard() {
     };
   }, [itineraries]);
 
+  const showPropagationToast = (message: string) => {
+    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+    setPropagationToast(message);
+    toastTimeoutRef.current = setTimeout(() => setPropagationToast(null), 5000);
+  };
+
   const handleCopyId = (id: string) => {
     navigator.clipboard.writeText(id);
     setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 2000);
+    if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+    copyTimeoutRef.current = setTimeout(() => setCopiedId(null), 2000);
   };
 
   const handleItineraryCreated = (newItinerary: Itinerary) => {
     setItineraries((prev) => [newItinerary, ...prev]);
-    setPropagationToast(`Safari Itinerary "${newItinerary.group_name}" successfully registered! 72h SMS triggers scheduled.`);
-    setTimeout(() => setPropagationToast(null), 5000);
+    showPropagationToast(`“${newItinerary.group_name}” has been added.`);
   };
 
   const handleItineraryUpdated = (updated: Itinerary) => {
     setItineraries((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
-    setPropagationToast(`Real-time downstream update propagated to all lodge stops for "${updated.group_name}"!`);
-    setTimeout(() => setPropagationToast(null), 5000);
+    showPropagationToast(`Guest details for “${updated.group_name}” have been updated.`);
   };
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-300">
-      {/* Top Banner & Title */}
-      <div className="bg-gradient-to-r from-stone-900 via-stone-800 to-amber-950 rounded-2xl p-6 sm:p-8 text-white shadow-xl border border-stone-800 relative overflow-hidden">
-        <div className="absolute right-0 top-0 bottom-0 w-1/3 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-amber-600/20 via-transparent to-transparent pointer-events-none"></div>
-
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="space-y-2 max-w-2xl">
-            <div className="flex items-center space-x-2">
-              <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                Tour Operator Control Center
-              </span>
-              <div className="flex items-center space-x-1.5 text-xs text-stone-300">
-                <Radio className={`w-3.5 h-3.5 ${backendStatus.online ? 'text-emerald-400 animate-pulse' : 'text-amber-400'}`} />
-                <span>
-                  {backendStatus.online ? 'Backend Engine Connected' : 'Local Fallback Synced'}
-                </span>
-              </div>
-            </div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">
-              Safari Dietary &amp; Itinerary Synchronization
-            </h1>
-            <p className="text-stone-300 text-sm leading-relaxed">
-              Safeguard safari guests with zero-data GSM signaling. Manage multi-lodge itineraries, track live chef USSD confirmations, and propagate mid-trip allergy updates downstream instantly.
-            </p>
+    <div className="space-y-6 animate-in fade-in duration-300">
+      <section className="flex flex-col gap-5 rounded-2xl border border-stone-200 bg-white p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:p-7">
+        <div className="max-w-2xl">
+          <div className="mb-2 flex items-center gap-2 text-xs font-medium text-stone-500">
+            <span className="rounded-full bg-stone-100 px-2.5 py-1 text-stone-700">Safari operations</span>
+            <span className="flex items-center gap-1.5">
+              <span className={`h-2 w-2 rounded-full ${backendStatus.online ? 'bg-emerald-600' : backendStatus.checking ? 'bg-amber-500' : 'bg-stone-400'}`} />
+              {backendStatus.checking ? 'Checking connection' : backendStatus.online ? 'Connected' : 'Using saved trips'}
+            </span>
           </div>
-
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-            <button
-              onClick={() => setIsCreateOpen(true)}
-              className="px-5 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold text-sm shadow-lg hover:shadow-amber-500/20 transition-all flex items-center justify-center space-x-2 group"
-            >
-              <Plus className="w-4 h-4 transition-transform group-hover:rotate-90" />
-              <span>Create Safari Itinerary</span>
-            </button>
-            <button
-              onClick={loadData}
-              className="p-3 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-300 hover:text-white border border-stone-700 transition-colors flex items-center justify-center"
-              title="Refresh Itineraries"
-            >
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            </button>
-          </div>
+          <h1 className="text-2xl font-semibold tracking-tight text-stone-900 sm:text-3xl">
+            Your safari itineraries
+          </h1>
+          <p className="mt-1.5 text-sm leading-6 text-stone-600">
+            Keep lodge teams up to date on guest arrivals and meal requirements.
+          </p>
         </div>
-      </div>
 
-      {/* Downstream Propagation Toast Banner */}
+        <div className="flex shrink-0 items-center gap-2">
+          <button
+            onClick={() => setIsCreateOpen(true)}
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-amber-700 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-amber-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700 focus-visible:ring-offset-2"
+          >
+            <Plus className="h-4 w-4" />
+            <span>New itinerary</span>
+          </button>
+          <button
+            onClick={loadData}
+            className="inline-flex h-11 w-11 items-center justify-center rounded-lg border border-stone-300 bg-white text-stone-600 transition-colors hover:bg-stone-50 hover:text-stone-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700 focus-visible:ring-offset-2"
+            title="Refresh itineraries"
+            aria-label="Refresh itineraries"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          </button>
+        </div>
+      </section>
+
       {propagationToast && (
-        <div className="p-4 rounded-xl bg-emerald-900/90 border border-emerald-600 text-emerald-100 flex items-center justify-between shadow-xl animate-in fade-in slide-in-from-top-2 duration-300">
-          <div className="flex items-center space-x-3 text-sm">
-            <div className="w-8 h-8 rounded-full bg-emerald-800 flex items-center justify-center shrink-0">
-              <Check className="w-4 h-4 text-emerald-300" />
-            </div>
-            <div>
-              <span className="font-bold text-white">Downstream Synchronization Active:</span>{' '}
-              <span>{propagationToast}</span>
-            </div>
+        <div role="status" className="flex items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+          <div className="flex items-center gap-2">
+            <Check className="h-4 w-4 shrink-0 text-emerald-700" />
+            <span>{propagationToast}</span>
           </div>
           <button
-            onClick={() => setPropagationToast(null)}
-            className="text-emerald-300 hover:text-white p-1"
+            onClick={() => {
+              if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+              setPropagationToast(null);
+            }}
+            className="rounded p-1 text-emerald-800 hover:bg-emerald-100"
+            aria-label="Dismiss notification"
           >
-            &times;
+            <span aria-hidden="true">&times;</span>
           </button>
         </div>
       )}
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
-        <div className="bg-white p-4 rounded-xl border border-stone-200 shadow-sm flex items-center space-x-3">
-          <div className="w-10 h-10 rounded-lg bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-700 shrink-0">
-            <Sparkles className="w-5 h-5" />
+      <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-stone-200 bg-stone-100 sm:grid-cols-3 lg:grid-cols-5">
+        {[
+          { label: 'Active trips', value: metrics.totalItineraries },
+          { label: 'Lodge stops', value: metrics.totalStops },
+          { label: 'Guests', value: metrics.totalGuests },
+          { label: 'Allergy alerts', value: metrics.severeAllergies },
+          { label: 'Chef confirmations', value: `${metrics.confirmationRate}%` },
+        ].map((metric, index) => (
+          <div
+            key={metric.label}
+            className={`min-w-0 bg-white px-4 py-4 sm:px-5 ${index === 4 ? 'col-span-2 sm:col-span-1' : ''}`}
+          >
+            <p className="text-2xl font-semibold tracking-tight text-stone-900">{metric.value}</p>
+            <p className="mt-1 truncate text-xs text-stone-500">{metric.label}</p>
           </div>
-          <div>
-            <div className="text-xl font-bold text-stone-900">{metrics.totalItineraries}</div>
-            <div className="text-xs text-stone-500">Active Itineraries</div>
-          </div>
-        </div>
-
-        <div className="bg-white p-4 rounded-xl border border-stone-200 shadow-sm flex items-center space-x-3">
-          <div className="w-10 h-10 rounded-lg bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-700 shrink-0">
-            <Building2 className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="text-xl font-bold text-stone-900">{metrics.totalStops}</div>
-            <div className="text-xs text-stone-500">Lodge Stops</div>
-          </div>
-        </div>
-
-        <div className="bg-white p-4 rounded-xl border border-stone-200 shadow-sm flex items-center space-x-3">
-          <div className="w-10 h-10 rounded-lg bg-stone-100 border border-stone-200 flex items-center justify-center text-stone-700 shrink-0">
-            <Users className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="text-xl font-bold text-stone-900">{metrics.totalGuests}</div>
-            <div className="text-xs text-stone-500">Monitored Guests</div>
-          </div>
-        </div>
-
-        <div className="bg-white p-4 rounded-xl border border-stone-200 shadow-sm flex items-center space-x-3">
-          <div className="w-10 h-10 rounded-lg bg-red-50 border border-red-200 flex items-center justify-center text-red-700 shrink-0">
-            <ShieldAlert className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="text-xl font-bold text-red-600">{metrics.severeAllergies}</div>
-            <div className="text-xs text-stone-500">Severe Allergies</div>
-          </div>
-        </div>
-
-        <div className="col-span-2 lg:col-span-1 bg-white p-4 rounded-xl border border-stone-200 shadow-sm flex items-center space-x-3">
-          <div className="w-10 h-10 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-700 shrink-0">
-            <CheckCircle2 className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="text-xl font-bold text-emerald-700">{metrics.confirmationRate}%</div>
-            <div className="text-xs text-stone-500">Chef Confirmed</div>
-          </div>
-        </div>
+        ))}
       </div>
 
       {/* Filter and Search Bar */}
-      <div className="bg-white p-4 rounded-xl border border-stone-200 shadow-sm flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+      <div className="flex flex-col gap-3 rounded-xl border border-stone-200 bg-white p-3 sm:flex-row sm:items-center">
         <div className="relative flex-1">
-          <Search className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
           <input
             type="text"
-            placeholder="Search by group name, booking code (ITIN-...), lodge, or guest..."
+            aria-label="Search itineraries"
+            placeholder="Search trips, lodges or guests"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 rounded-lg border border-stone-300 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 bg-stone-50/50"
+            className="w-full rounded-lg border border-transparent bg-stone-50 py-2.5 pl-9 pr-4 text-sm text-stone-900 placeholder:text-stone-400 focus:border-amber-700 focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-700/15"
           />
         </div>
 
-        <div className="flex items-center space-x-2 text-xs">
-          <Filter className="w-3.5 h-3.5 text-stone-400 shrink-0" />
-          <span className="text-stone-500 font-medium">Filter Status:</span>
+        <div className="flex items-center gap-2 sm:pl-3">
+          <Filter className="h-4 w-4 shrink-0 text-stone-400" />
           <select
+            aria-label="Filter by stop status"
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-3 py-2 rounded-lg border border-stone-300 bg-white font-medium text-stone-700 focus:outline-none focus:ring-2 focus:ring-amber-500"
+            className="min-h-10 flex-1 rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-stone-700 focus:border-amber-700 focus:outline-none focus:ring-2 focus:ring-amber-700/15 sm:flex-none"
           >
-            <option value="all">All Stops Status</option>
-            <option value="pending">Pending Dispatch</option>
-            <option value="sms_sent">SMS Sent (72h Window)</option>
-            <option value="confirmed">Chef Confirmed via USSD</option>
+            <option value="all">All statuses</option>
+            <option value="pending">Scheduled</option>
+            <option value="sms_sent">SMS sent</option>
+            <option value="confirmed">Confirmed</option>
           </select>
         </div>
       </div>
@@ -288,204 +280,171 @@ export default function OperatorDashboard() {
       {/* Itinerary Cards */}
       {loading ? (
         <div className="text-center py-16 bg-white rounded-2xl border border-stone-200">
-          <RefreshCw className="w-8 h-8 animate-spin mx-auto text-amber-600 mb-3" />
-          <p className="text-stone-600 text-sm font-medium">Loading Safari Itineraries...</p>
+          <RefreshCw className="mx-auto mb-3 h-7 w-7 animate-spin text-amber-700" />
+          <p className="text-sm font-medium text-stone-600">Loading itineraries…</p>
         </div>
       ) : filteredItineraries.length === 0 ? (
-        <div className="text-center py-16 bg-white rounded-2xl border border-dashed border-stone-300 p-8">
-          <UtensilsCrossed className="w-12 h-12 mx-auto text-stone-300 mb-3" />
-          <h3 className="text-lg font-bold text-stone-800">No Safari Itineraries Found</h3>
-          <p className="text-stone-500 text-sm max-w-md mx-auto mt-1 mb-6">
+        <div className="rounded-2xl border border-dashed border-stone-300 bg-white px-6 py-14 text-center">
+          <UtensilsCrossed className="mx-auto mb-3 h-10 w-10 text-stone-300" />
+          <h3 className="text-lg font-semibold text-stone-800">
+            {searchQuery || statusFilter !== 'all' ? 'No matching trips' : 'No itineraries yet'}
+          </h3>
+          <p className="mx-auto mb-6 mt-1 max-w-md text-sm text-stone-500">
             {searchQuery || statusFilter !== 'all'
-              ? 'Try adjusting your search criteria or filter parameters.'
-              : 'Register your first multi-lodge safari group to begin automated Africa’s Talking 72h dispatches.'}
+              ? 'Try another search or choose a different status.'
+              : 'Add a trip to keep lodge teams informed about arrivals and meal requirements.'}
           </p>
           <button
             onClick={() => setIsCreateOpen(true)}
-            className="inline-flex items-center space-x-2 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-semibold rounded-lg text-sm shadow transition-colors"
+            className="inline-flex items-center gap-2 rounded-lg bg-amber-700 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-amber-800"
           >
-            <Plus className="w-4 h-4" />
-            <span>Create Itinerary</span>
+            <Plus className="h-4 w-4" />
+            <span>New itinerary</span>
           </button>
         </div>
       ) : (
-        <div className="space-y-6">
-          {filteredItineraries.map((itinerary) => (
-            <div
-              key={itinerary.id}
-              className="bg-white rounded-2xl border border-stone-200 shadow-sm hover:shadow-md transition-shadow overflow-hidden"
-            >
-              {/* Card Header */}
-              <div className="p-5 sm:p-6 bg-stone-50 border-b border-stone-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="space-y-1">
-                  <div className="flex items-center space-x-2">
-                    <span className="font-mono text-xs font-bold bg-stone-200 text-stone-800 px-2.5 py-0.5 rounded-md flex items-center space-x-1">
-                      <span>{itinerary.id}</span>
-                      <button
-                        onClick={() => handleCopyId(itinerary.id)}
-                        className="hover:text-amber-700 ml-1"
-                        title="Copy Booking Reference"
-                      >
-                        {copiedId === itinerary.id ? (
-                          <Check className="w-3 h-3 text-emerald-600" />
-                        ) : (
-                          <Copy className="w-3 h-3 text-stone-500" />
-                        )}
-                      </button>
-                    </span>
-                    <span className="text-xs text-stone-500">
-                      Created: {new Date(itinerary.created_at).toLocaleDateString()}
-                    </span>
-                    {itinerary.updated_at && (
-                      <span className="text-xs text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 font-medium">
-                        Updated Mid-Trip
+        <div className="space-y-4">
+          {filteredItineraries.map((itinerary) => {
+            const mealNoteCount = countMealNotes(itinerary);
+            const severeAllergyCount = countSevereAllergies(itinerary);
+
+            return (
+              <div
+                key={itinerary.id}
+                className="overflow-hidden rounded-2xl border border-stone-200 bg-white"
+              >
+                <div className="flex flex-col gap-4 border-b border-stone-100 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+                  <div className="min-w-0">
+                    <div className="mb-1.5 flex flex-wrap items-center gap-2">
+                      <span className="inline-flex items-center gap-1.5 rounded-md bg-stone-100 px-2 py-1 font-mono text-[11px] font-medium text-stone-600">
+                        <span>{itinerary.id}</span>
+                        <button
+                          onClick={() => handleCopyId(itinerary.id)}
+                          className="rounded p-0.5 text-stone-500 hover:bg-stone-200 hover:text-stone-900"
+                          title="Copy booking reference"
+                          aria-label={`Copy booking reference ${itinerary.id}`}
+                        >
+                          {copiedId === itinerary.id ? (
+                            <Check className="h-3 w-3 text-emerald-700" />
+                          ) : (
+                            <Copy className="h-3 w-3" />
+                          )}
+                        </button>
                       </span>
-                    )}
+                      {itinerary.updated_at && (
+                        <span className="rounded-full bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-800">
+                          Updated
+                        </span>
+                      )}
+                      {severeAllergyCount > 0 && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-1 text-[11px] font-medium text-red-800">
+                          <ShieldAlert className="h-3 w-3 shrink-0" />
+                          {severeAllergyCount} severe {severeAllergyCount === 1 ? 'allergy' : 'allergies'}
+                        </span>
+                      )}
+                    </div>
+                    <h2 className="truncate text-lg font-semibold tracking-tight text-stone-900 sm:text-xl">
+                      {itinerary.group_name}
+                    </h2>
+                    <p className="mt-1 text-xs text-stone-500">
+                      {itinerary.stops.length} {itinerary.stops.length === 1 ? 'lodge' : 'lodges'} · {itinerary.guests.length} {itinerary.guests.length === 1 ? 'guest' : 'guests'}
+                    </p>
                   </div>
-                  <h2 className="text-lg sm:text-xl font-bold text-stone-900 tracking-tight">
-                    {itinerary.group_name}
-                  </h2>
+
+                  <div className="flex shrink-0 flex-wrap items-center gap-2">
+                    <button
+                      onClick={() => setEditingItinerary(itinerary)}
+                      className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-stone-300 bg-white px-3 py-2 text-xs font-medium text-stone-700 transition-colors hover:border-stone-400 hover:bg-stone-50"
+                    >
+                      <Edit3 className="h-3.5 w-3.5" />
+                      <span>Edit guests</span>
+                    </button>
+                    <Link
+                      href={`/manifest/${itinerary.id}`}
+                      className="inline-flex min-h-9 items-center gap-1.5 rounded-lg bg-stone-900 px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-stone-700"
+                    >
+                      <span>Open manifest</span>
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    </Link>
+                  </div>
                 </div>
 
-                <div className="flex items-center space-x-2 sm:space-x-3">
-                  <button
-                    onClick={() => setEditingItinerary(itinerary)}
-                    className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-white border border-stone-300 hover:border-amber-500 text-stone-700 hover:text-amber-800 text-xs font-semibold shadow-sm transition-all"
-                    title="Edit guest counts or allergies mid-trip and demonstrate real-time downstream propagation"
-                  >
-                    <Edit3 className="w-3.5 h-3.5 text-amber-600" />
-                    <span>Edit Guests / Allergies</span>
-                  </button>
-                  <Link
-                    href={`/manifest/${itinerary.id}`}
-                    className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-stone-900 hover:bg-stone-800 text-amber-300 text-xs font-semibold shadow-sm transition-colors"
-                  >
-                    <span>Lodge Manifest View</span>
-                    <ExternalLink className="w-3.5 h-3.5" />
-                  </Link>
-                </div>
-              </div>
+                <div className="px-5 py-4 sm:px-6">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <h3 className="flex items-center gap-2 text-sm font-medium text-stone-800">
+                      <Building2 className="h-4 w-4 text-stone-500" />
+                      Lodge route
+                    </h3>
+                    <span className="hidden text-xs text-stone-500 sm:block">
+                      Kitchen teams receive updates before arrival
+                    </span>
+                  </div>
 
-              {/* Sequential Lodge Stops Visualizer */}
-              <div className="p-5 sm:p-6 border-b border-stone-100">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-xs font-bold text-stone-400 uppercase tracking-wider flex items-center space-x-1.5">
-                    <Building2 className="w-3.5 h-3.5 text-stone-500" />
-                    <span>Sequential Safari Lodge Stops ({itinerary.stops.length} properties)</span>
-                  </h3>
-                  <span className="text-xs text-stone-500">
-                    Dispatched 72h ahead via Africa’s Talking SMS
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {itinerary.stops.map((stop, idx) => {
-                    const status = getStopStatus(stop);
-                    return (
-                      <div
-                        key={stop.id || idx}
-                        className="p-4 rounded-xl border border-stone-200 bg-stone-50/50 hover:bg-white hover:border-stone-300 transition-all space-y-3 relative flex flex-col justify-between"
-                      >
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between">
-                            <span className="text-[11px] font-bold text-amber-800 bg-amber-100/60 px-2 py-0.5 rounded-full">
-                              Stop #{idx + 1}
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+                    {itinerary.stops.map((stop, idx) => {
+                      const status = getStopStatus(stop);
+                      return (
+                        <div
+                          key={stop.id || idx}
+                          className="flex min-w-0 flex-col rounded-xl border border-stone-200 p-4"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-xs font-medium text-stone-500">
+                              Stop {idx + 1}
                             </span>
                             <StatusBadge status={status} size="sm" />
                           </div>
 
-                          <h4 className="font-bold text-stone-900 text-sm leading-snug">
+                          <h4 className="mt-3 line-clamp-2 min-h-10 text-sm font-semibold leading-5 text-stone-900">
                             {stop.lodge_name}
                           </h4>
 
-                          <div className="space-y-1 text-xs text-stone-600 pt-1">
-                            <div className="flex items-center space-x-2">
-                              <Calendar className="w-3.5 h-3.5 text-stone-400 shrink-0" />
-                              <span className="font-medium text-stone-800">{stop.check_in_date}</span>
+                          <div className="mt-3 space-y-1.5 text-xs text-stone-600">
+                            <div className="flex items-center gap-2">
+                              <Calendar className="h-3.5 w-3.5 shrink-0 text-stone-400" />
+                              <span>Arrives {formatCheckInDate(stop.check_in_date)}</span>
                             </div>
-                            <div className="flex items-center space-x-2">
-                              <Phone className="w-3.5 h-3.5 text-stone-400 shrink-0" />
-                              <span className="font-mono text-stone-700">{stop.chef_phone}</span>
+                            <div className="flex items-center gap-2">
+                              <Phone className="h-3.5 w-3.5 shrink-0 text-stone-400" />
+                              <span className="truncate font-mono text-stone-700">{stop.chef_phone}</span>
                             </div>
                           </div>
-                        </div>
 
-                        <div className="pt-2 border-t border-stone-200/60 flex items-center justify-between text-[11px]">
-                          <span className="text-stone-400">
-                            {status === 'confirmed'
-                              ? 'Confirmed via *384*44#'
-                              : status === 'sms_sent'
-                              ? 'Alert sent to chef'
-                              : 'Scheduled 72h window'}
-                          </span>
-                          <Link
-                            href={`/manifest/${itinerary.id}?lodge=${encodeURIComponent(stop.lodge_name)}`}
-                            className="text-amber-700 hover:text-amber-900 font-semibold flex items-center space-x-1"
-                          >
-                            <span>Lounge View</span>
-                            <ArrowRight className="w-3 h-3" />
-                          </Link>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Guest Manifest Summary & Allergy Tags */}
-              <div className="p-5 sm:p-6 bg-white flex flex-col md:flex-row items-start md:items-center justify-between gap-4 text-xs">
-                <div className="space-y-2 max-w-3xl">
-                  <div className="flex items-center space-x-2">
-                    <Users className="w-3.5 h-3.5 text-stone-400" />
-                    <span className="font-bold text-stone-700">
-                      Guest Roster ({itinerary.guests.length} Travelers):
-                    </span>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    {itinerary.guests.map((guest, gIdx) => {
-                      const hasSevere =
-                        guest.allergies.toLowerCase().includes('anaphylaxis') ||
-                        guest.allergies.toLowerCase().includes('peanut') ||
-                        guest.allergies.toLowerCase().includes('severe');
-                      const hasAllergy = guest.allergies && guest.allergies !== 'None';
-
-                      return (
-                        <div
-                          key={guest.id || gIdx}
-                          className={`px-2.5 py-1 rounded-lg border text-xs flex items-center space-x-1.5 ${
-                            hasSevere
-                              ? 'bg-red-50 border-red-200 text-red-900 font-medium'
-                              : hasAllergy
-                              ? 'bg-amber-50 border-amber-200 text-amber-900'
-                              : 'bg-stone-50 border-stone-200 text-stone-700'
-                          }`}
-                        >
-                          {hasSevere && <ShieldAlert className="w-3 h-3 text-red-600 shrink-0" />}
-                          <span className="font-semibold">{guest.name}:</span>
-                          <span className="text-[11px] opacity-90">{guest.allergies}</span>
-                          {guest.dietary_requirements && guest.dietary_requirements !== 'Standard' && (
-                            <span className="text-[10px] bg-white/70 px-1 rounded font-mono text-stone-600">
-                              {guest.dietary_requirements}
+                          <div className="mt-4 flex items-center justify-between gap-2 border-t border-stone-100 pt-3">
+                            <span className="flex min-w-0 items-center gap-1.5 text-xs text-stone-500">
+                              {mealNoteCount > 0 && <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-700" />}
+                              <span className="truncate">
+                                {mealNoteCount > 0
+                                  ? `${mealNoteCount} guests with meal notes`
+                                  : 'No meal notes'}
+                              </span>
                             </span>
-                          )}
+                            <Link
+                              href={`/manifest/${itinerary.id}?lodge=${encodeURIComponent(stop.lodge_name)}`}
+                              className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-amber-800 hover:text-amber-950"
+                            >
+                              <span>Details</span>
+                              <ArrowRight className="h-3 w-3" />
+                            </Link>
+                          </div>
                         </div>
                       );
                     })}
                   </div>
                 </div>
 
-                <div className="text-right shrink-0">
-                  <button
-                    onClick={() => setEditingItinerary(itinerary)}
-                    className="text-xs text-amber-700 hover:text-amber-900 font-semibold underline underline-offset-2 flex items-center space-x-1"
-                  >
-                    <span>Demonstrate Downstream Propagation</span>
-                    <ArrowRight className="w-3 h-3" />
-                  </button>
+                <div className="flex flex-col gap-2 border-t border-stone-100 bg-stone-50/70 px-5 py-3.5 text-xs sm:flex-row sm:items-center sm:justify-between sm:px-6">
+                  <div className="flex items-center gap-2 text-stone-600">
+                    <Users className="h-3.5 w-3.5 shrink-0 text-stone-400" />
+                    <span>{itinerary.guests.length} {itinerary.guests.length === 1 ? 'guest' : 'guests'}</span>
+                    <span aria-hidden="true">·</span>
+                    <span>Meal details are available in the manifest</span>
+                  </div>
+                  <span className="text-stone-500">Updates are sent before each arrival</span>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -503,32 +462,6 @@ export default function OperatorDashboard() {
         onUpdated={handleItineraryUpdated}
       />
 
-      {/* Zero-Data Architecture Explainer Footnote */}
-      <div className="bg-stone-100 rounded-2xl p-6 border border-stone-200 text-xs text-stone-600 space-y-3">
-        <h4 className="font-bold text-stone-800 text-sm flex items-center space-x-2">
-          <span>Zero-Data Safari Synchronization Architecture</span>
-        </h4>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-white p-3.5 rounded-lg border border-stone-200 space-y-1">
-            <span className="font-bold text-stone-900 block text-xs">1. Staggered 72h SMS Alerts</span>
-            <p>
-              The Go backend monitors departure dates. 72 hours prior to arrival, Africa’s Talking SMS alerts the head chef with itinerary ID and headcount. No cleartext allergy data is ever sent via SMS.
-            </p>
-          </div>
-          <div className="bg-white p-3.5 rounded-lg border border-stone-200 space-y-1">
-            <span className="font-bold text-stone-900 block text-xs">2. Offline USSD Lookup (*384*44#)</span>
-            <p>
-              Camp chefs in dead cellular zones dial standard GSM shortcode <code className="bg-stone-100 px-1 py-0.5 rounded text-amber-700 font-mono">*384*44#</code>. It pulls live allergy specs from Neon PostgreSQL with zero internet data.
-            </p>
-          </div>
-          <div className="bg-white p-3.5 rounded-lg border border-stone-200 space-y-1">
-            <span className="font-bold text-stone-900 block text-xs">3. Secure Lounge Manifest View</span>
-            <p>
-              Properties with guest lounge Wi-Fi access authenticated online manifests at <code className="bg-stone-100 px-1 py-0.5 rounded text-amber-700 font-mono">/manifest/[code]</code> to review specs and click &quot;Confirm Manifest&quot;.
-            </p>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }

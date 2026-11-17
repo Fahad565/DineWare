@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { X, Plus, Trash2, Calendar, Phone, Building2, User, AlertCircle, Sparkles } from 'lucide-react';
+import { X, Plus, Trash2, Calendar, Phone, Building2, User, AlertCircle, MapPin } from 'lucide-react';
 import { CreateItineraryRequest, GuestInput, Itinerary, StopInput } from '../types/itinerary';
 import { createItinerary } from '../lib/api';
 
@@ -140,14 +140,12 @@ export function CreateItineraryModal({ isOpen, onClose, onCreated }: CreateItine
         {/* Header */}
         <div className="px-6 py-4 bg-stone-900 text-stone-100 flex items-center justify-between border-b border-stone-800">
           <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 rounded-lg bg-amber-600 flex items-center justify-center text-white">
-              <Sparkles className="w-4 h-4" />
+            <div className="w-8 h-8 rounded-lg bg-amber-700 flex items-center justify-center text-white">
+              <MapPin className="w-4 h-4" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-white">Register Safari Itinerary</h2>
-              <p className="text-xs text-stone-400">
-                Multi-lodge booking with automated 72h privacy-safe SMS triggers &amp; protected allergy manifests
-              </p>
+              <h2 className="text-lg font-semibold text-white">New itinerary</h2>
+              <p className="text-xs text-stone-400">Add a group, lodge stops and guest meal requirements.</p>
             </div>
           </div>
           <button
@@ -170,12 +168,12 @@ export function CreateItineraryModal({ isOpen, onClose, onCreated }: CreateItine
           {/* Group Details */}
           <div className="bg-stone-50 p-4 rounded-xl border border-stone-200 space-y-4">
             <h3 className="font-semibold text-stone-900 text-base flex items-center space-x-2">
-              <span>1. Safari Group Details</span>
+              <span>Trip details</span>
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="md:col-span-2">
                 <label className="block text-xs font-semibold text-stone-700 mb-1">
-                  Safari Group Name <span className="text-red-500">*</span>
+                  Group name <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -188,7 +186,7 @@ export function CreateItineraryModal({ isOpen, onClose, onCreated }: CreateItine
               </div>
               <div>
                 <label className="block text-xs font-semibold text-stone-700 mb-1">
-                  Booking Code (Optional)
+                  Booking reference (optional)
                 </label>
                 <input
                   type="text"
@@ -207,10 +205,10 @@ export function CreateItineraryModal({ isOpen, onClose, onCreated }: CreateItine
               <div>
                 <h3 className="font-semibold text-stone-900 text-base flex items-center space-x-2">
                   <Building2 className="w-4 h-4 text-amber-600" />
-                  <span>2. Sequential Lodge Stops</span>
+                  <span>Lodges</span>
                 </h3>
                 <p className="text-xs text-stone-500">
-                  Chefs will receive a privacy-safe non-sensitive SMS alert exactly 72h prior to arrival.
+                  Each lodge receives a reminder before guests arrive.
                 </p>
               </div>
               <button
@@ -233,7 +231,7 @@ export function CreateItineraryModal({ isOpen, onClose, onCreated }: CreateItine
                     #{index + 1}
                   </div>
                   <div className="md:col-span-4">
-                    <label className="block text-[11px] font-medium text-stone-600 mb-0.5">Lodge / Camp Name</label>
+                    <label className="block text-[11px] font-medium text-stone-600 mb-0.5">Lodge or camp</label>
                     <input
                       type="text"
                       required
@@ -246,7 +244,7 @@ export function CreateItineraryModal({ isOpen, onClose, onCreated }: CreateItine
                   <div className="md:col-span-3">
                     <label className="block text-[11px] font-medium text-stone-600 mb-0.5 flex items-center space-x-1">
                       <Phone className="w-3 h-3 text-stone-400" />
-                      <span>Chef Phone (GSM)</span>
+                      <span>Chef phone</span>
                     </label>
                     <input
                       type="text"
@@ -292,10 +290,10 @@ export function CreateItineraryModal({ isOpen, onClose, onCreated }: CreateItine
               <div>
                 <h3 className="font-semibold text-stone-900 text-base flex items-center space-x-2">
                   <User className="w-4 h-4 text-amber-600" />
-                  <span>3. Guest Dietary &amp; Allergy Manifest</span>
+                  <span>Guest meal requirements</span>
                 </h3>
                 <p className="text-xs text-stone-500">
-                  Protected health info. Stripped from plain SMS, accessible exclusively via authenticated USSD (*384*44#) or lounge web.
+                  Allergy and diet details stay out of SMS and are available in the secure manifest.
                 </p>
               </div>
               <button
@@ -316,7 +314,7 @@ export function CreateItineraryModal({ isOpen, onClose, onCreated }: CreateItine
                 >
                   <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
                     <div className="md:col-span-3">
-                      <label className="block text-[11px] font-medium text-stone-600 mb-0.5">Guest Full Name</label>
+                      <label className="block text-[11px] font-medium text-stone-600 mb-0.5">Guest name</label>
                       <input
                         type="text"
                         required
@@ -328,7 +326,7 @@ export function CreateItineraryModal({ isOpen, onClose, onCreated }: CreateItine
                     </div>
                     <div className="md:col-span-4">
                       <label className="block text-[11px] font-medium text-stone-600 mb-0.5">
-                        Allergies <span className="text-red-500 font-semibold">(Protected Health Data)</span>
+                        Allergies
                       </label>
                       <input
                         type="text"
@@ -364,8 +362,8 @@ export function CreateItineraryModal({ isOpen, onClose, onCreated }: CreateItine
 
                   {/* Quick Select Chips */}
                   <div className="flex flex-wrap items-center gap-1.5 pt-1 text-[11px]">
-                    <span className="text-stone-400 text-[10px] uppercase font-semibold">Quick Tags:</span>
-                    {COMMON_ALLERGIES.slice(0, 4).map((allergy) => (
+                    <span className="text-stone-400 text-[10px] font-semibold">Common additions:</span>
+                    {COMMON_ALLERGIES.slice(0, 3).map((allergy) => (
                       <button
                         key={allergy}
                         type="button"
@@ -374,7 +372,7 @@ export function CreateItineraryModal({ isOpen, onClose, onCreated }: CreateItine
                           const nextVal = current ? `${current}, ${allergy}` : allergy;
                           handleGuestChange(index, 'allergies', nextVal);
                         }}
-                        className="px-2 py-0.5 bg-stone-100 hover:bg-stone-200 text-stone-700 rounded border border-stone-200 text-[10px]"
+                        className="px-2 py-1 bg-stone-100 hover:bg-stone-200 text-stone-700 rounded border border-stone-200 text-[10px]"
                       >
                         + {allergy}
                       </button>
@@ -384,7 +382,7 @@ export function CreateItineraryModal({ isOpen, onClose, onCreated }: CreateItine
                         key={diet}
                         type="button"
                         onClick={() => handleGuestChange(index, 'dietary_requirements', diet)}
-                        className="px-2 py-0.5 bg-amber-50 hover:bg-amber-100 text-amber-800 rounded border border-amber-200 text-[10px]"
+                        className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 rounded border border-amber-200 text-[10px]"
                       >
                         {diet}
                       </button>
@@ -398,7 +396,7 @@ export function CreateItineraryModal({ isOpen, onClose, onCreated }: CreateItine
           {/* Footer Submit */}
           <div className="pt-4 border-t border-stone-200 flex items-center justify-between">
             <div className="text-xs text-stone-500">
-              Total Stops: <span className="font-bold text-stone-800">{stops.length}</span> • Total Manifest Guests: <span className="font-bold text-stone-800">{guests.length}</span>
+              {stops.length} {stops.length === 1 ? 'lodge' : 'lodges'} · {guests.length} {guests.length === 1 ? 'guest' : 'guests'}
             </div>
             <div className="flex items-center space-x-3">
               <button
@@ -411,14 +409,14 @@ export function CreateItineraryModal({ isOpen, onClose, onCreated }: CreateItine
               <button
                 type="submit"
                 disabled={loading}
-                className="px-5 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-semibold shadow-md transition-colors flex items-center space-x-2 disabled:opacity-50"
+                className="px-5 py-2 rounded-lg bg-amber-700 hover:bg-amber-800 text-white font-semibold transition-colors flex items-center space-x-2 disabled:opacity-50"
               >
                 {loading ? (
                   <span>Saving Itinerary...</span>
                 ) : (
                   <>
-                    <Sparkles className="w-4 h-4" />
-                    <span>Create Safari Itinerary</span>
+                    <Plus className="w-4 h-4" />
+                    <span>Create itinerary</span>
                   </>
                 )}
               </button>
