@@ -12,6 +12,7 @@ coverage.html
 node_modules/
 .next/
 out/
+*.tsbuildinfo
 
 # Environment files
 .env

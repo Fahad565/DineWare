@@ -144,7 +144,7 @@ export function CreateItineraryModal({ isOpen, onClose, onCreated }: CreateItine
               <MapPin className="w-4 h-4" />
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-white">New itinerary</h2>
+              <h2 className="font-display text-lg font-bold text-white">New itinerary</h2>
               <p className="text-xs text-stone-400">Add a group, lodge stops and guest meal requirements.</p>
             </div>
           </div>
@@ -227,7 +227,7 @@ export function CreateItineraryModal({ isOpen, onClose, onCreated }: CreateItine
                   key={index}
                   className="bg-white p-3.5 rounded-lg border border-stone-200 grid grid-cols-1 md:grid-cols-12 gap-3 items-center"
                 >
-                  <div className="md:col-span-1 text-xs font-bold text-amber-700 bg-amber-50 w-7 h-7 rounded-full flex items-center justify-center border border-amber-200">
+                  <div className="md:col-span-1 font-mono text-xs font-bold text-amber-700 bg-amber-50 w-7 h-7 rounded-full flex items-center justify-center border border-amber-200">
                     #{index + 1}
                   </div>
                   <div className="md:col-span-4">

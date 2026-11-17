@@ -110,7 +110,7 @@ export function EditGuestsModal({ isOpen, onClose, itinerary, onUpdated }: EditG
               <User className="w-4 h-4" />
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-white flex items-center space-x-2">
+              <h2 className="font-display text-lg font-bold text-white flex items-center space-x-2">
                 <span>Edit guest details</span>
               </h2>
               <p className="text-xs text-stone-400">

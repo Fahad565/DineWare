@@ -183,7 +183,7 @@ export default function OperatorDashboard() {
               {backendStatus.checking ? 'Checking connection' : backendStatus.online ? 'Connected' : 'Using saved trips'}
             </span>
           </div>
-          <h1 className="text-2xl font-semibold tracking-tight text-stone-900 sm:text-3xl">
+          <h1 className="font-display text-2xl font-bold tracking-tight text-stone-900">
             Your safari itineraries
           </h1>
           <p className="mt-1.5 text-sm leading-6 text-stone-600">
@@ -286,7 +286,7 @@ export default function OperatorDashboard() {
       ) : filteredItineraries.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-stone-300 bg-white px-6 py-14 text-center">
           <UtensilsCrossed className="mx-auto mb-3 h-10 w-10 text-stone-300" />
-          <h3 className="text-lg font-semibold text-stone-800">
+          <h3 className="font-display text-lg font-bold text-stone-800">
             {searchQuery || statusFilter !== 'all' ? 'No matching trips' : 'No itineraries yet'}
           </h3>
           <p className="mx-auto mb-6 mt-1 max-w-md text-sm text-stone-500">
@@ -343,7 +343,7 @@ export default function OperatorDashboard() {
                         </span>
                       )}
                     </div>
-                    <h2 className="truncate text-lg font-semibold tracking-tight text-stone-900 sm:text-xl">
+                    <h2 className="truncate font-display text-lg font-bold tracking-tight text-stone-900 sm:text-xl">
                       {itinerary.group_name}
                     </h2>
                     <p className="mt-1 text-xs text-stone-500">
@@ -389,13 +389,13 @@ export default function OperatorDashboard() {
                           className="flex min-w-0 flex-col rounded-xl border border-stone-200 p-4"
                         >
                           <div className="flex items-center justify-between gap-2">
-                            <span className="text-xs font-medium text-stone-500">
+                            <span className="font-mono text-xs font-medium text-stone-500">
                               Stop {idx + 1}
                             </span>
                             <StatusBadge status={status} size="sm" />
                           </div>
 
-                          <h4 className="mt-3 line-clamp-2 min-h-10 text-sm font-semibold leading-5 text-stone-900">
+                          <h4 className="mt-3 line-clamp-2 min-h-10 font-display text-base font-bold leading-5 text-stone-900">
                             {stop.lodge_name}
                           </h4>
 
