@@ -22,7 +22,7 @@ import {
   Check,
 } from 'lucide-react';
 import { Itinerary, Stop, Guest, getStopStatus } from '../../../types/itinerary';
-import { fetchItinerary, confirmManifestForLodge } from '../../../lib/api';
+import { fetchItinerary } from '../../../lib/api';
 import { StatusBadge } from '../../../components/StatusBadge';
 
 export default function LodgeManifestPage() {
@@ -34,14 +34,14 @@ export default function LodgeManifestPage() {
 
   const [itinerary, setItinerary] = useState<Itinerary | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [selectedLodgeName, setSelectedLodgeName] = useState<string>(initialLodgeQuery);
-  const [confirming, setConfirming] = useState(false);
-  const [confirmedSuccess, setConfirmedSuccess] = useState<{ timestamp: string; token: string } | null>(null);
 
   // Load manifest
   const loadManifest = React.useCallback(async () => {
     if (!code) return;
     setLoading(true);
+    setLoadError(null);
     try {
       const data = await fetchItinerary(code);
       setItinerary(data);
@@ -53,7 +53,8 @@ export default function LodgeManifestPage() {
         setSelectedLodgeName(match ? match.lodge_name : data.stops[0].lodge_name);
       }
     } catch (e) {
-      console.warn('Failed to load itinerary manifest:', e);
+      setItinerary(null);
+      setLoadError(e instanceof Error ? e.message : 'Failed to load manifest from the backend.');
     } finally {
       setLoading(false);
     }
@@ -114,33 +115,13 @@ export default function LodgeManifestPage() {
     return { total, severe, dietary, standard };
   }, [itinerary]);
 
-  const handleConfirm = async () => {
-    if (!itinerary || !currentStop) return;
-    setConfirming(true);
-    try {
-      const updated = await confirmManifestForLodge(itinerary.id, currentStop.id);
-      if (updated) {
-        setItinerary(updated);
-      }
-      const token = `CONF-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
-      setConfirmedSuccess({
-        timestamp: new Date().toLocaleString(),
-        token,
-      });
-    } catch (e) {
-      console.warn('Failed to confirm manifest:', e);
-    } finally {
-      setConfirming(false);
-    }
-  };
-
   const handlePrint = () => {
     if (typeof window !== 'undefined') {
       window.print();
     }
   };
 
-  const isStopConfirmed = currentStop?.chef_confirmed || !!confirmedSuccess;
+  const isStopConfirmed = Boolean(currentStop?.chef_confirmed);
 
   if (loading) {
     return (
@@ -158,10 +139,23 @@ export default function LodgeManifestPage() {
         <div className="w-16 h-16 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto">
           <ShieldAlert className="w-8 h-8" />
         </div>
-        <h2 className="text-2xl font-bold text-stone-900">Manifest Not Found</h2>
+        <h2 className="text-2xl font-bold text-stone-900">
+          {loadError ? 'Could Not Load Manifest' : 'Manifest Not Found'}
+        </h2>
         <p className="text-stone-600 text-sm">
-          No safari itinerary was found for booking reference code <code className="bg-stone-200 px-1.5 py-0.5 rounded font-mono text-stone-900 font-bold">{code}</code>.
+          {loadError
+            ? loadError
+            : <>No safari itinerary was found for booking reference code <code className="bg-stone-200 px-1.5 py-0.5 rounded font-mono text-stone-900 font-bold">{code}</code>.</>}
         </p>
+        {loadError && (
+          <button
+            onClick={loadManifest}
+            className="inline-flex items-center gap-2 rounded-lg bg-amber-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-amber-800"
+          >
+            <RefreshCw className="h-4 w-4" />
+            Retry
+          </button>
+        )}
         <div className="pt-4">
           <Link
             href="/"
@@ -287,7 +281,6 @@ export default function LodgeManifestPage() {
               </div>
               <p className="text-xs text-emerald-800">
                 Kitchen confirmed receipt of dietary &amp; allergy manifests. Synchronized with Tour Operator Dashboard.
-                {confirmedSuccess && ` Timestamp: ${confirmedSuccess.timestamp} (Ref: ${confirmedSuccess.token})`}
               </p>
             </div>
           </div>
@@ -440,7 +433,7 @@ export default function LodgeManifestPage() {
             <span>Kitchen Manifest Acknowledgment Loop</span>
           </h3>
           <p className="text-xs text-stone-600 leading-relaxed">
-            Confirming this manifest logs an auditable confirmation in the system, updating the Tour Operator Dashboard status from <span className="font-mono text-amber-800">SMS Sent</span> to <span className="font-mono text-emerald-800">Chef Confirmed</span>.
+            Chef confirmations are recorded by the backend after the chef confirms receipt in the secure USSD workflow.
           </p>
         </div>
 
@@ -451,23 +444,7 @@ export default function LodgeManifestPage() {
               <span>Manifest Confirmed</span>
             </div>
           ) : (
-            <button
-              onClick={handleConfirm}
-              disabled={confirming}
-              className="px-6 py-3.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-sm shadow-lg hover:shadow-amber-600/20 transition-all flex items-center space-x-2 disabled:opacity-50"
-            >
-              {confirming ? (
-                <>
-                  <RefreshCw className="w-4 h-4 animate-spin" />
-                  <span>Logging Confirmation...</span>
-                </>
-              ) : (
-                <>
-                  <CheckCircle2 className="w-4 h-4" />
-                  <span>Confirm Manifest</span>
-                </>
-              )}
-            </button>
+            <span className="text-sm font-semibold text-amber-800">Chef confirmation pending</span>
           )}
         </div>
       </div>

@@ -62,6 +62,7 @@ function countSevereAllergies(itinerary: Itinerary) {
 export default function OperatorDashboard() {
   const [itineraries, setItineraries] = useState<Itinerary[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [backendStatus, setBackendStatus] = useState<{ online: boolean; checking: boolean }>({
@@ -85,9 +86,11 @@ export default function OperatorDashboard() {
         checkBackendHealth(),
       ]);
       setItineraries(data);
+      setLoadError(null);
       setBackendStatus({ online: health.online, checking: false });
     } catch (e) {
-      console.warn('Failed to fetch data:', e);
+      setItineraries([]);
+      setLoadError(e instanceof Error ? e.message : 'Failed to load itineraries from the backend.');
       setBackendStatus({ online: false, checking: false });
     } finally {
       setLoading(false);
@@ -282,6 +285,18 @@ export default function OperatorDashboard() {
         <div className="text-center py-16 bg-white rounded-2xl border border-stone-200">
           <RefreshCw className="mx-auto mb-3 h-7 w-7 animate-spin text-amber-700" />
           <p className="text-sm font-medium text-stone-600">Loading itineraries…</p>
+        </div>
+      ) : loadError ? (
+        <div role="alert" className="rounded-2xl border border-red-200 bg-red-50 px-6 py-10 text-center">
+          <h3 className="font-display text-lg font-bold text-red-900">Could not load live itineraries</h3>
+          <p className="mx-auto mt-2 max-w-xl text-sm text-red-800">{loadError}</p>
+          <button
+            onClick={loadData}
+            className="mt-5 inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-900"
+          >
+            <RefreshCw className="h-4 w-4" />
+            Retry
+          </button>
         </div>
       ) : filteredItineraries.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-stone-300 bg-white px-6 py-14 text-center">
