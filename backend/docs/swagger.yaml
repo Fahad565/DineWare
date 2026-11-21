@@ -130,7 +130,6 @@ definitions:
           $ref: '#/definitions/models.GuestInput'
         type: array
     type: object
-host: localhost:8080
 info:
   contact:
     email: support@dineware.local
