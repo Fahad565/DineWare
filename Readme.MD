@@ -1,7 +1,7 @@
 # DineWare Link
 
 ## 📋 Problem Statement
-Modern safari lodges increasingly rely on cloud-based booking systems to manage guest logistics. However, remote camp kitchens operate in geographic zones plagued by erratic satellite links, dead cellular spots, and severe peak-hour network congestion, forcing Wi-Fi access to be restricted solely to guest lounges. Because back-of-house kitchen teams are physically cut off from internet connectivity, critical real-time updates—such as life-threatening guest food allergies, late cancellations, and dynamic multi-lodge itinerary changes—fail to propagate to chefs. This operational blind spot not only creates critical guest safety risks but also drives massive food wastage and financial loss, as remote kitchens over-prepare specialized ingredients and perishable supplies based on stale, un-updated manifests.
+Modern safari lodges increasingly rely on cloud-based booking systems to manage guest logistics. However, remote camp kitchens operate in geographic zones plagued by erratic satellite links and severe peak-hour network congestion, forcing Wi-Fi access to be restricted solely to guest lounges. Because back-of-house kitchen teams are physically cut off from internet connectivity, critical real-time updates such as life-threatening guest food allergies, late cancellations, and dynamic multi-lodge itinerary changes fail to propagate to chefs. This operational blind spot not only creates critical guest safety risks but also drives massive food wastage and financial loss, as remote kitchens over-prepare specialized ingredients and perishable supplies based on stale, un-updated manifests.
 
 ## 💎 Core Value Propositions
 * **Zero-Data Reliability:** Kitchen-facing operational interactions run entirely over GSM signaling channels (USSD and SMS), requiring 0 Kbps of internet data bandwidth from the kitchen staff.
@@ -15,9 +15,9 @@ DineWare bridges the operational gap between connected safari tour operators and
 2. **Secure Offline GSM Manifest Queries:** Upon receiving the SMS trigger, the chef dials an authenticated shortcode (`*384*44#`) using the standard GSM signaling channel. The request maps through Africa's Talking USSD gateway to our highly concurrent Go-engine backend, validating the kitchen's identity and pulling fresh guest manifests directly from Neon PostgreSQL, keeping sensitive health profiles secure without an active internet setup.
 
 ## 🧰 Technology Stack
-* **Frontend:** Next.js (TypeScript) — Managed web platform for Tour Operators to register and manage guest vectors.
-* **Backend:** Golang (v1.22) — High-concurrency engine handling Africa's Talking integrations and database state machine routines.
-* **Database:** Neon PostgreSQL — Serverless relational layer hosting live operational manifests and audit records.
+* **Frontend:** Next.js (TypeScript) - Managed web platform for Tour Operators to register and manage guest vectors.
+* **Backend:** Golang (v1.22) - High-concurrency engine handling Africa's Talking integrations and database state machine routines.
+* **Database:** Neon PostgreSQL - Serverless relational layer hosting live operational manifests and audit records.
 * **Communications Gateway:** Africa's Talking APIs (SMS & USSD pipelines).
 * **Environments:** GitHub Codespaces (Core Dev Environment) + Google Jules (Project Spin Up).
 * **Deployment System:** Render via `render.yaml` blueprints executing multi-stage Docker builds natively via `dockerContext`.
