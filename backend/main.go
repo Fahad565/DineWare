@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -176,11 +175,25 @@ func main() {
 		store = db.NewMemoryStore()
 	}
 
-	atUsername := strings.TrimSpace(os.Getenv("AT_USERNAME"))
-	atAPIKey := strings.TrimSpace(os.Getenv("AT_API_KEY"))
-	fmt.Printf("Africa's Talking configuration: AT_USERNAME=%q, AT_API_KEY configured=%t\n",
-		atUsername, atAPIKey != "")
-	atClient := integrations.NewATClient(atUsername, atAPIKey)
+	atConfig := integrations.ATConfig{
+		Environment: os.Getenv("AT_ENV"),
+		Username:    strings.TrimSpace(os.Getenv("AT_USERNAME")),
+		APIKey:      os.Getenv("AT_API_KEY"),
+		SenderID:    os.Getenv("AT_SENDER_ID"),
+		USSDCode:    os.Getenv("AT_USSD_CODE"),
+		PortalURL:   os.Getenv("PUBLIC_PORTAL_URL"),
+	}
+	if strings.EqualFold(atConfig.Username, "sandbox") {
+		atConfig.Username = "sandbox"
+	}
+	atMode := integrations.ResolveATMode(atConfig.Environment, atConfig.Username)
+	atUSSDCode := strings.TrimSpace(atConfig.USSDCode)
+	if atUSSDCode == "" {
+		atUSSDCode = "*384*44#"
+	}
+	log.Printf("Africa's Talking mode=%s username=%s ussd=%s",
+		atMode, strings.TrimSpace(atConfig.Username), atUSSDCode)
+	atClient := integrations.NewATClientWithConfig(atConfig)
 	workerCtx, stopWorker := context.WithCancel(context.Background())
 	workerDone := make(chan struct{})
 	var dispatcher handlers.DueStopDispatcher

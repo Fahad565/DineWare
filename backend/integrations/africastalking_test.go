@@ -99,7 +99,7 @@ func TestSendSMSCallsATEndpoint(t *testing.T) {
 		capturedBody = r.FormValue("message")
 		capturedFrom = r.Form["from"]
 		w.WriteHeader(http.StatusCreated)
-		w.Write([]byte(`{"SMSMessageData":{"Message":"Sent to 1/1 Total Cost: KES 0.8000"}}`))
+		w.Write([]byte(`{"SMSMessageData":{"Message":"Sent to 1/1 Total Cost: KES 0.8000","Recipients":[{"statusCode":101,"number":"+254711000001","status":"Success"}]}}`))
 	}))
 	defer srv.Close()
 
@@ -133,6 +133,42 @@ func TestSendSMSCallsATEndpoint(t *testing.T) {
 		if strings.Contains(lower, kw) {
 			t.Errorf("SMS body dispatched to AT API contains sensitive keyword %q: %s", kw, capturedBody)
 		}
+	}
+
+}
+
+func TestSendSMSRejectsRecipientEvenWhenHTTPIsCreated(t *testing.T) {
+	tests := []struct {
+		name      string
+		recipient string
+		wantErr   string
+	}{
+		{
+			name:      "invalid phone",
+			recipient: `{"statusCode":403,"number":"+254700000000","status":"InvalidPhoneNumber"}`,
+			wantErr:   "recipient +254700000000 rejected: InvalidPhoneNumber (403)",
+		},
+		{
+			name:      "other non-success code",
+			recipient: `{"statusCode":402,"number":"+254700000001","status":"InsufficientCredit"}`,
+			wantErr:   "recipient +254700000001 rejected: InsufficientCredit (402)",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusCreated)
+				_, _ = w.Write([]byte(`{"SMSMessageData":{"Recipients":[` + tt.recipient + `]}}`))
+			}))
+			defer srv.Close()
+
+			client := integrations.NewATClientWithBaseURL("sandbox", "test-api-key", srv.URL)
+			err := client.SendSMS(context.Background(), "+254700000000", "ITIN-2026-001", "Smith Safari", 4, "2026-12-01")
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("expected error containing %q, got %v", tt.wantErr, err)
+			}
+		})
 	}
 }
 

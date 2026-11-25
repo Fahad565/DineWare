@@ -8,6 +8,7 @@ package integrations
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -19,6 +20,18 @@ import (
 // smsBaseURL is the Africa's Talking SMS endpoint.
 const smsBaseURL = "https://api.africastalking.com/version1/messaging"
 const smsSandboxBaseURL = "https://api.sandbox.africastalking.com/version1/messaging"
+const defaultUSSDCode = "*384*44#"
+const defaultPortalURL = "https://dineware-operator-portal.onrender.com"
+
+// ATConfig contains Africa's Talking credentials and message configuration.
+type ATConfig struct {
+	Environment string
+	Username    string
+	APIKey      string
+	SenderID    string
+	USSDCode    string
+	PortalURL   string
+}
 
 func normalizeATUsername(username string) string {
 	username = strings.TrimSpace(username)
@@ -26,6 +39,22 @@ func normalizeATUsername(username string) string {
 		return "sandbox"
 	}
 	return username
+}
+
+// ResolveATMode returns sandbox or production. Unrecognized or missing environment
+// values fall back to the conventional sandbox username check.
+func ResolveATMode(environment, username string) string {
+	switch strings.ToLower(strings.TrimSpace(environment)) {
+	case "sandbox":
+		return "sandbox"
+	case "production", "live":
+		return "production"
+	default:
+		if strings.EqualFold(strings.TrimSpace(username), "sandbox") {
+			return "sandbox"
+		}
+		return "production"
+	}
 }
 
 // sensitiveKeywords is the list of terms that must NEVER appear in an SMS payload.
@@ -41,20 +70,41 @@ var sensitiveKeywords = []string{
 type ATClient struct {
 	username   string
 	apiKey     string
+	senderID   string
+	ussdCode   string
+	portalURL  string
 	httpClient *http.Client
 	baseURL    string // overridable in tests
 }
 
 // NewATClient constructs an ATClient from the given credentials.
 func NewATClient(username, apiKey string) *ATClient {
-	username = normalizeATUsername(username)
+	return NewATClientWithConfig(ATConfig{Username: username, APIKey: apiKey})
+}
+
+// NewATClientWithConfig constructs a client using the requested environment and
+// optional sender, USSD, and portal settings.
+func NewATClientWithConfig(config ATConfig) *ATClient {
+	username := normalizeATUsername(config.Username)
+	mode := ResolveATMode(config.Environment, username)
 	baseURL := smsBaseURL
-	if username == "sandbox" {
+	if mode == "sandbox" {
 		baseURL = smsSandboxBaseURL
+	}
+	ussdCode := strings.TrimSpace(config.USSDCode)
+	if ussdCode == "" {
+		ussdCode = defaultUSSDCode
+	}
+	portalURL := strings.TrimRight(strings.TrimSpace(config.PortalURL), "/")
+	if portalURL == "" {
+		portalURL = defaultPortalURL
 	}
 	return &ATClient{
 		username:   username,
-		apiKey:     strings.TrimSpace(apiKey),
+		apiKey:     strings.TrimSpace(config.APIKey),
+		senderID:   strings.TrimSpace(config.SenderID),
+		ussdCode:   ussdCode,
+		portalURL:  portalURL,
 		baseURL:    baseURL,
 		httpClient: &http.Client{Timeout: 10 * time.Second},
 	}
@@ -66,6 +116,8 @@ func NewATClientWithBaseURL(username, apiKey, baseURL string) *ATClient {
 	return &ATClient{
 		username:   normalizeATUsername(username),
 		apiKey:     strings.TrimSpace(apiKey),
+		ussdCode:   defaultUSSDCode,
+		portalURL:  defaultPortalURL,
 		baseURL:    baseURL,
 		httpClient: &http.Client{Timeout: 10 * time.Second},
 	}
@@ -77,15 +129,34 @@ func NewATClientWithBaseURL(username, apiKey, baseURL string) *ATClient {
 //   - Property-specific itinerary reference code.
 //   - Number of arriving guests.
 //   - Scheduled arrival date.
-//   - A prompt to retrieve the full manifest via USSD (*384*44#) or the web portal.
+//   - A prompt to retrieve the full manifest via the configured USSD code or portal.
 //
 // No allergy, dietary, or health information is included.
 func BuildPrivacySafeSMS(itineraryID, groupName string, guestCount int, arrivalDate string) (string, error) {
+	return BuildPrivacySafeSMSWithConfig(itineraryID, groupName, guestCount, arrivalDate, defaultUSSDCode, defaultPortalURL)
+}
+
+// BuildPrivacySafeSMSWithConfig constructs a privacy-safe message with configured
+// access instructions and portal URL.
+func BuildPrivacySafeSMSWithConfig(itineraryID, groupName string, guestCount int, arrivalDate, ussdCode, portalURL string) (string, error) {
+	ussdCode = strings.TrimSpace(ussdCode)
+	if ussdCode == "" {
+		ussdCode = defaultUSSDCode
+	}
+	portalURL = strings.TrimRight(strings.TrimSpace(portalURL), "/")
+	if portalURL == "" {
+		portalURL = defaultPortalURL
+	}
+	portalLink := portalURL
+	if !strings.HasSuffix(strings.ToLower(portalLink), "/manifest") {
+		portalLink += "/manifest"
+	}
+
 	msg := fmt.Sprintf(
 		"DineWare Alert: Group '%s' (Ref: %s) — %d guest(s) arriving %s. "+
-			"Dial *384*44# on your GSM phone to view the full manifest securely. "+
-			"Web portal: https://dineware.app/manifest",
-		groupName, itineraryID, guestCount, arrivalDate,
+			"Dial %s on your GSM phone to view the full manifest securely. "+
+			"Web portal: %s",
+		groupName, itineraryID, guestCount, arrivalDate, ussdCode, portalLink,
 	)
 
 	// Safety belt: enforce zero leakage of sensitive terms
@@ -117,7 +188,9 @@ func assertNoSensitiveData(payload string) error {
 //   - guestCount: number of arriving guests.
 //   - arrivalDate: formatted arrival date string (YYYY-MM-DD).
 func (c *ATClient) SendSMS(ctx context.Context, to, itineraryID, groupName string, guestCount int, arrivalDate string) error {
-	msg, err := BuildPrivacySafeSMS(itineraryID, groupName, guestCount, arrivalDate)
+	msg, err := BuildPrivacySafeSMSWithConfig(
+		itineraryID, groupName, guestCount, arrivalDate, c.ussdCode, c.portalURL,
+	)
 	if err != nil {
 		return err
 	}
@@ -126,6 +199,9 @@ func (c *ATClient) SendSMS(ctx context.Context, to, itineraryID, groupName strin
 	params.Set("username", c.username)
 	params.Set("to", to)
 	params.Set("message", msg)
+	if c.senderID != "" {
+		params.Set("from", c.senderID)
+	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL, strings.NewReader(params.Encode()))
 	if err != nil {
@@ -151,6 +227,57 @@ func (c *ATClient) SendSMS(ctx context.Context, to, itineraryID, groupName strin
 		resp.Status, strings.TrimSpace(string(body)))
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("AT SMS API returned HTTP %d: %s", resp.StatusCode, string(body))
+	}
+
+	var result struct {
+		SMSMessageData struct {
+			Recipients []struct {
+				StatusCode int    `json:"statusCode"`
+				Number     string `json:"number"`
+				Status     string `json:"status"`
+			} `json:"Recipients"`
+		} `json:"SMSMessageData"`
+	}
+	if err := json.Unmarshal(body, &result); err != nil {
+		return fmt.Errorf("decode AT SMS API response: %w", err)
+	}
+	if len(result.SMSMessageData.Recipients) == 0 {
+		return fmt.Errorf("AT SMS API returned no recipient delivery results")
+	}
+
+	successfulRecipients := 0
+	for _, recipient := range result.SMSMessageData.Recipients {
+		status := strings.TrimSpace(recipient.Status)
+		statusSuccess := strings.EqualFold(status, "Success")
+		if recipient.StatusCode == 403 || (recipient.StatusCode != 0 && recipient.StatusCode != 101) {
+			number := recipient.Number
+			if number == "" {
+				number = to
+			}
+			if status == "" && recipient.StatusCode == 403 {
+				status = "InvalidPhoneNumber"
+			}
+			if status == "" {
+				status = "delivery failed"
+			}
+			return fmt.Errorf("recipient %s rejected: %s (%d)", number, status, recipient.StatusCode)
+		}
+		if recipient.StatusCode == 101 || statusSuccess {
+			successfulRecipients++
+			continue
+		}
+
+		number := recipient.Number
+		if number == "" {
+			number = to
+		}
+		if status == "" {
+			status = "delivery failed"
+		}
+		return fmt.Errorf("recipient %s rejected: %s (%d)", number, status, recipient.StatusCode)
+	}
+	if successfulRecipients == 0 {
+		return fmt.Errorf("AT SMS API returned no successful recipient deliveries")
 	}
 	return nil
 }
