@@ -18,6 +18,15 @@ import (
 
 // smsBaseURL is the Africa's Talking SMS endpoint.
 const smsBaseURL = "https://api.africastalking.com/version1/messaging"
+const smsSandboxBaseURL = "https://api.sandbox.africastalking.com/version1/messaging"
+
+func normalizeATUsername(username string) string {
+	username = strings.TrimSpace(username)
+	if strings.EqualFold(username, "sandbox") {
+		return "sandbox"
+	}
+	return username
+}
 
 // sensitiveKeywords is the list of terms that must NEVER appear in an SMS payload.
 // This list is used in tests and in the production send path as a safety belt.
@@ -38,10 +47,15 @@ type ATClient struct {
 
 // NewATClient constructs an ATClient from the given credentials.
 func NewATClient(username, apiKey string) *ATClient {
+	username = normalizeATUsername(username)
+	baseURL := smsBaseURL
+	if username == "sandbox" {
+		baseURL = smsSandboxBaseURL
+	}
 	return &ATClient{
-		username:   strings.TrimSpace(username),
+		username:   username,
 		apiKey:     strings.TrimSpace(apiKey),
-		baseURL:    smsBaseURL,
+		baseURL:    baseURL,
 		httpClient: &http.Client{Timeout: 10 * time.Second},
 	}
 }
@@ -50,7 +64,7 @@ func NewATClient(username, apiKey string) *ATClient {
 // Use this in tests to point the client at an httptest.Server.
 func NewATClientWithBaseURL(username, apiKey, baseURL string) *ATClient {
 	return &ATClient{
-		username:   strings.TrimSpace(username),
+		username:   normalizeATUsername(username),
 		apiKey:     strings.TrimSpace(apiKey),
 		baseURL:    baseURL,
 		httpClient: &http.Client{Timeout: 10 * time.Second},
@@ -117,7 +131,7 @@ func (c *ATClient) SendSMS(ctx context.Context, to, itineraryID, groupName strin
 	if err != nil {
 		return fmt.Errorf("failed to build SMS request: %w", err)
 	}
-	req.Header.Set("ApiKey", c.apiKey)
+	req.Header.Set("apiKey", c.apiKey)
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 

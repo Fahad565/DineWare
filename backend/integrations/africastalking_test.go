@@ -83,15 +83,21 @@ func TestSMSBlocksInjectedAllergyContent(t *testing.T) {
 func TestSendSMSCallsATEndpoint(t *testing.T) {
 	t.Parallel()
 
-	var capturedBody, capturedAPIKey, capturedUsername string
+	var capturedBody, capturedAPIKey, capturedUsername, capturedTo string
+	var capturedAccept, capturedContentType string
+	var capturedFrom []string
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		capturedAPIKey = r.Header.Get("ApiKey")
+		capturedAccept = r.Header.Get("Accept")
+		capturedContentType = r.Header.Get("Content-Type")
 		if err := r.ParseForm(); err != nil {
 			t.Errorf("server: ParseForm error: %v", err)
 		}
 		capturedUsername = r.FormValue("username")
+		capturedTo = r.FormValue("to")
 		capturedBody = r.FormValue("message")
+		capturedFrom = r.Form["from"]
 		w.WriteHeader(http.StatusCreated)
 		w.Write([]byte(`{"SMSMessageData":{"Message":"Sent to 1/1 Total Cost: KES 0.8000"}}`))
 	}))
@@ -108,6 +114,18 @@ func TestSendSMSCallsATEndpoint(t *testing.T) {
 	}
 	if capturedUsername != "sandbox" {
 		t.Errorf("expected username 'sandbox', got %q", capturedUsername)
+	}
+	if capturedTo != "+254711000001" {
+		t.Errorf("expected recipient phone number, got %q", capturedTo)
+	}
+	if capturedAccept != "application/json" {
+		t.Errorf("expected Accept application/json, got %q", capturedAccept)
+	}
+	if capturedContentType != "application/x-www-form-urlencoded" {
+		t.Errorf("expected form Content-Type, got %q", capturedContentType)
+	}
+	if len(capturedFrom) != 0 {
+		t.Errorf("expected from field to be omitted, got %v", capturedFrom)
 	}
 
 	lower := strings.ToLower(capturedBody)
