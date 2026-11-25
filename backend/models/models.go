@@ -59,6 +59,22 @@ type UpdateGuestsRequest struct {
 	Guests []GuestInput `json:"guests"`
 }
 
+// UpdateStopInput represents a lodge stop in a full itinerary update.
+// ID is omitted for new stops and supplied for existing stops.
+type UpdateStopInput struct {
+	ID          int    `json:"id,omitempty"`
+	LodgeName   string `json:"lodge_name"`
+	ChefPhone   string `json:"chef_phone"`
+	CheckInDate string `json:"check_in_date"`
+}
+
+// UpdateItineraryRequest represents all editable itinerary details.
+type UpdateItineraryRequest struct {
+	GroupName string            `json:"group_name"`
+	Stops     []UpdateStopInput `json:"stops"`
+	Guests    []GuestInput      `json:"guests"`
+}
+
 // HealthResponse represents system health status.
 type HealthResponse struct {
 	Status    string `json:"status" example:"OK"`

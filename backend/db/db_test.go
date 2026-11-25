@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -93,6 +94,91 @@ func TestMemoryStoreCRUD(t *testing.T) {
 	}
 	if len(list) != 1 {
 		t.Fatalf("expected 1 itinerary in list, got %d", len(list))
+	}
+}
+
+func TestMemoryStoreUpdateItineraryDispatchResetAndDelete(t *testing.T) {
+	ctx := context.Background()
+	store := NewMemoryStore()
+	checkIn := time.Now().Add(24 * time.Hour).Format("2006-01-02")
+	created, err := store.CreateItinerary(ctx, models.CreateItineraryRequest{
+		GroupName: "Original trip",
+		Stops: []models.StopInput{
+			{LodgeName: "First Lodge", ChefPhone: "+254700000001", CheckInDate: checkIn},
+			{LodgeName: "Removed Lodge", ChefPhone: "+254700000002", CheckInDate: checkIn},
+		},
+		Guests: []models.GuestInput{{Name: "Guest", Allergies: "None"}},
+	})
+	if err != nil {
+		t.Fatalf("create itinerary: %v", err)
+	}
+	if err := store.MarkNotificationSent(ctx, created.Stops[0].ID); err != nil {
+		t.Fatalf("mark stop notified: %v", err)
+	}
+	if err := store.ConfirmManifest(ctx, created.ID, created.Stops[0].ChefPhone); err != nil {
+		t.Fatalf("confirm first stop: %v", err)
+	}
+
+	updated, dispatch, err := store.UpdateItinerary(ctx, created.ID, models.UpdateItineraryRequest{
+		GroupName: "Updated trip",
+		Stops: []models.UpdateStopInput{
+			{
+				ID: created.Stops[0].ID, LodgeName: "First Lodge Updated",
+				ChefPhone: "+254700000003", CheckInDate: checkIn,
+			},
+			{
+				LodgeName: "New Lodge", ChefPhone: "+254700000004",
+				CheckInDate: time.Now().Add(5 * 24 * time.Hour).Format("2006-01-02"),
+			},
+		},
+		Guests: []models.GuestInput{{Name: "Updated Guest", Allergies: "Peanuts", DietaryRequirements: "Vegan"}},
+	})
+	if err != nil {
+		t.Fatalf("update itinerary: %v", err)
+	}
+	if !dispatch {
+		t.Fatal("expected changed due stop to trigger dispatch")
+	}
+	if updated.GroupName != "Updated trip" || len(updated.Stops) != 2 || len(updated.Guests) != 1 {
+		t.Fatalf("unexpected updated itinerary: %+v", updated)
+	}
+	if updated.Stops[0].NotificationSent || updated.Stops[0].ChefConfirmed {
+		t.Errorf("expected changed stop notifications and confirmation to reset: %+v", updated.Stops[0])
+	}
+	if updated.Stops[0].ChefPhone != "+254700000003" || updated.Stops[0].LodgeName != "First Lodge Updated" {
+		t.Errorf("stop details were not updated: %+v", updated.Stops[0])
+	}
+
+	updated, dispatch, err = store.UpdateItinerary(ctx, created.ID, models.UpdateItineraryRequest{
+		GroupName: "Renamed trip",
+		Stops: []models.UpdateStopInput{
+			{
+				ID: updated.Stops[0].ID, LodgeName: updated.Stops[0].LodgeName,
+				ChefPhone: updated.Stops[0].ChefPhone, CheckInDate: updated.Stops[0].CheckInDate,
+			},
+			{
+				ID: updated.Stops[1].ID, LodgeName: updated.Stops[1].LodgeName,
+				ChefPhone: updated.Stops[1].ChefPhone, CheckInDate: updated.Stops[1].CheckInDate,
+			},
+		},
+		Guests: []models.GuestInput{{Name: "Updated Guest", Allergies: "Peanuts"}},
+	})
+	if err != nil {
+		t.Fatalf("update group name: %v", err)
+	}
+	if dispatch {
+		t.Error("group-name-only update should not trigger dispatch")
+	}
+
+	if err := store.DeleteItinerary(ctx, created.ID); err != nil {
+		t.Fatalf("delete itinerary: %v", err)
+	}
+	if _, err := store.GetItinerary(ctx, created.ID); !errors.Is(err, ErrNotFound) {
+		t.Errorf("expected deleted itinerary to be missing, got %v", err)
+	}
+	itineraries, err := store.ListItineraries(ctx)
+	if err != nil || len(itineraries) != 0 {
+		t.Errorf("expected no itineraries after deletion, itineraries=%v err=%v", itineraries, err)
 	}
 }
 

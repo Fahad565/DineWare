@@ -13,6 +13,8 @@ import {
   ArrowRight,
   ExternalLink,
   Edit3,
+  Pencil,
+  Trash2,
   Copy,
   Check,
   RefreshCw,
@@ -21,9 +23,10 @@ import {
   ShieldAlert,
 } from 'lucide-react';
 import { Itinerary, getStopStatus } from '../types/itinerary';
-import { fetchItineraries, checkBackendHealth } from '../lib/api';
+import { deleteItinerary, fetchItineraries, checkBackendHealth } from '../lib/api';
 import { StatusBadge } from '../components/StatusBadge';
 import { CreateItineraryModal } from '../components/CreateItineraryModal';
+import { EditItineraryModal } from '../components/EditItineraryModal';
 import { EditGuestsModal } from '../components/EditGuestsModal';
 
 function formatCheckInDate(value: string) {
@@ -72,6 +75,9 @@ export default function OperatorDashboard() {
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingItinerary, setEditingItinerary] = useState<Itinerary | null>(null);
+  const [editingTrip, setEditingTrip] = useState<Itinerary | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [propagationToast, setPropagationToast] = useState<string | null>(null);
   const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -172,7 +178,25 @@ export default function OperatorDashboard() {
 
   const handleItineraryUpdated = (updated: Itinerary) => {
     setItineraries((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
-    showPropagationToast(`Guest details for “${updated.group_name}” have been updated.`);
+    showPropagationToast(`“${updated.group_name}” has been updated.`);
+  };
+
+  const handleDeleteItinerary = async (itinerary: Itinerary) => {
+    if (!window.confirm('Delete this itinerary and all lodge stops?')) return;
+
+    setActionError(null);
+    setDeletingId(itinerary.id);
+    try {
+      await deleteItinerary(itinerary.id);
+      setItineraries((current) => current.filter((item) => item.id !== itinerary.id));
+      setEditingItinerary((current) => current?.id === itinerary.id ? null : current);
+      setEditingTrip((current) => current?.id === itinerary.id ? null : current);
+      showPropagationToast(`“${itinerary.group_name}” and its lodge stops have been deleted.`);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Failed to delete itinerary.');
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   return (
@@ -228,6 +252,18 @@ export default function OperatorDashboard() {
             aria-label="Dismiss notification"
           >
             <span aria-hidden="true">&times;</span>
+          </button>
+        </div>
+      )}
+
+      {actionError && (
+        <div role="alert" className="flex items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          <span>{actionError}</span>
+          <button
+            onClick={() => setActionError(null)}
+            className="rounded px-2 py-1 font-medium hover:bg-red-100"
+          >
+            Dismiss
           </button>
         </div>
       )}
@@ -368,11 +404,28 @@ export default function OperatorDashboard() {
 
                   <div className="flex shrink-0 flex-wrap items-center gap-2">
                     <button
+                      onClick={() => setEditingTrip(itinerary)}
+                      className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-stone-300 bg-white px-3 py-2 text-xs font-medium text-stone-700 transition-colors hover:border-stone-400 hover:bg-stone-50"
+                      aria-label={`Edit trip ${itinerary.group_name}`}
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                      <span>Edit trip</span>
+                    </button>
+                    <button
                       onClick={() => setEditingItinerary(itinerary)}
                       className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-stone-300 bg-white px-3 py-2 text-xs font-medium text-stone-700 transition-colors hover:border-stone-400 hover:bg-stone-50"
                     >
                       <Edit3 className="h-3.5 w-3.5" />
                       <span>Edit guests</span>
+                    </button>
+                    <button
+                      onClick={() => handleDeleteItinerary(itinerary)}
+                      disabled={deletingId === itinerary.id}
+                      className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-red-200 bg-white px-3 py-2 text-xs font-medium text-red-700 transition-colors hover:border-red-300 hover:bg-red-50 disabled:cursor-wait disabled:opacity-60"
+                      aria-label={`Delete trip ${itinerary.group_name}`}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      <span>{deletingId === itinerary.id ? 'Deleting…' : 'Delete'}</span>
                     </button>
                     <Link
                       href={`/manifest/${itinerary.id}`}
@@ -474,6 +527,13 @@ export default function OperatorDashboard() {
         isOpen={!!editingItinerary}
         onClose={() => setEditingItinerary(null)}
         itinerary={editingItinerary}
+        onUpdated={handleItineraryUpdated}
+      />
+
+      <EditItineraryModal
+        isOpen={!!editingTrip}
+        onClose={() => setEditingTrip(null)}
+        itinerary={editingTrip}
         onUpdated={handleItineraryUpdated}
       />
 

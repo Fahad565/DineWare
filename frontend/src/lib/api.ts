@@ -1,4 +1,9 @@
-import { CreateItineraryRequest, Itinerary, UpdateGuestsRequest } from '../types/itinerary';
+import {
+  CreateItineraryRequest,
+  Itinerary,
+  UpdateGuestsRequest,
+  UpdateItineraryRequest,
+} from '../types/itinerary';
 
 const API_BASE_URL = '/api/backend';
 
@@ -91,4 +96,29 @@ export async function updateGuests(id: string, req: UpdateGuestsRequest): Promis
     throw await readError(res);
   }
   return res.json();
+}
+
+export async function updateItinerary(id: string, req: UpdateItineraryRequest): Promise<Itinerary> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/itineraries/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify(req),
+  });
+  if (!res.ok) {
+    throw await readError(res);
+  }
+  return res.json();
+}
+
+export async function deleteItinerary(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/itineraries/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    headers: { Accept: 'application/json' },
+  });
+  if (!res.ok) {
+    throw await readError(res);
+  }
 }

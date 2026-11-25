@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"dineware-backend/db"
 	"dineware-backend/handlers"
@@ -21,6 +22,8 @@ func newTestMux() (http.Handler, db.Store) {
 	mux.HandleFunc("POST /api/v1/itineraries", h.CreateItinerary)
 	mux.HandleFunc("GET /api/v1/itineraries", h.ListItineraries)
 	mux.HandleFunc("GET /api/v1/itineraries/{id}", h.GetItinerary)
+	mux.HandleFunc("PUT /api/v1/itineraries/{id}", h.UpdateItinerary)
+	mux.HandleFunc("DELETE /api/v1/itineraries/{id}", h.DeleteItinerary)
 	mux.HandleFunc("PATCH /api/v1/itineraries/{id}/guests", h.UpdateGuests)
 
 	return handlers.CORSMiddleware(mux), store
@@ -189,6 +192,79 @@ func TestItineraryLifecycle(t *testing.T) {
 
 	if notFoundRec.Code != http.StatusNotFound {
 		t.Errorf("expected 404 Not Found, got %d", notFoundRec.Code)
+	}
+}
+
+func TestUpdateAndDeleteItinerary(t *testing.T) {
+	router, _ := newTestMux()
+	createPayload := models.CreateItineraryRequest{
+		ID:        "ITIN-EDIT-DELETE",
+		GroupName: "Original trip",
+		Stops: []models.StopInput{{
+			LodgeName: "Original Lodge", ChefPhone: "+254700000001",
+			CheckInDate: time.Now().Add(5 * 24 * time.Hour).Format("2006-01-02"),
+		}},
+		Guests: []models.GuestInput{{Name: "Original Guest", Allergies: "None"}},
+	}
+	createBody, err := json.Marshal(createPayload)
+	if err != nil {
+		t.Fatalf("marshal create payload: %v", err)
+	}
+	createReq := httptest.NewRequest(http.MethodPost, "/api/v1/itineraries", bytes.NewReader(createBody))
+	createReq.Header.Set("Content-Type", "application/json")
+	createRec := httptest.NewRecorder()
+	router.ServeHTTP(createRec, createReq)
+	if createRec.Code != http.StatusCreated {
+		t.Fatalf("expected 201 Created, got %d: %s", createRec.Code, createRec.Body.String())
+	}
+
+	var created models.Itinerary
+	if err := json.NewDecoder(createRec.Body).Decode(&created); err != nil {
+		t.Fatalf("decode created itinerary: %v", err)
+	}
+	updatePayload := models.UpdateItineraryRequest{
+		GroupName: "Updated trip",
+		Stops: []models.UpdateStopInput{{
+			ID: created.Stops[0].ID, LodgeName: "Updated Lodge",
+			ChefPhone: "+254700000002", CheckInDate: created.Stops[0].CheckInDate,
+		}},
+		Guests: []models.GuestInput{{
+			Name: "Updated Guest", Allergies: "Peanuts", DietaryRequirements: "Vegan",
+		}},
+	}
+	updateBody, err := json.Marshal(updatePayload)
+	if err != nil {
+		t.Fatalf("marshal update payload: %v", err)
+	}
+	updateReq := httptest.NewRequest(http.MethodPut, "/api/v1/itineraries/"+created.ID, bytes.NewReader(updateBody))
+	updateReq.Header.Set("Content-Type", "application/json")
+	updateRec := httptest.NewRecorder()
+	router.ServeHTTP(updateRec, updateReq)
+	if updateRec.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d: %s", updateRec.Code, updateRec.Body.String())
+	}
+
+	var updated models.Itinerary
+	if err := json.NewDecoder(updateRec.Body).Decode(&updated); err != nil {
+		t.Fatalf("decode updated itinerary: %v", err)
+	}
+	if updated.GroupName != "Updated trip" || updated.Stops[0].LodgeName != "Updated Lodge" ||
+		updated.Stops[0].ChefPhone != "+254700000002" || updated.Guests[0].Name != "Updated Guest" {
+		t.Fatalf("unexpected updated itinerary: %+v", updated)
+	}
+
+	deleteReq := httptest.NewRequest(http.MethodDelete, "/api/v1/itineraries/"+created.ID, nil)
+	deleteRec := httptest.NewRecorder()
+	router.ServeHTTP(deleteRec, deleteReq)
+	if deleteRec.Code != http.StatusNoContent || deleteRec.Body.Len() != 0 {
+		t.Fatalf("expected 204 No Content, got %d with body %q", deleteRec.Code, deleteRec.Body.String())
+	}
+
+	getReq := httptest.NewRequest(http.MethodGet, "/api/v1/itineraries/"+created.ID, nil)
+	getRec := httptest.NewRecorder()
+	router.ServeHTTP(getRec, getReq)
+	if getRec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 after deletion, got %d", getRec.Code)
 	}
 }
 

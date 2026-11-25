@@ -47,6 +47,8 @@ func SetupRouter(store db.Store, dispatcher handlers.DueStopDispatcher) http.Han
 	mux.HandleFunc("POST /api/v1/itineraries", h.CreateItinerary)
 	mux.HandleFunc("GET /api/v1/itineraries", h.ListItineraries)
 	mux.HandleFunc("GET /api/v1/itineraries/{id}", h.GetItinerary)
+	mux.HandleFunc("PUT /api/v1/itineraries/{id}", h.UpdateItinerary)
+	mux.HandleFunc("DELETE /api/v1/itineraries/{id}", h.DeleteItinerary)
 	mux.HandleFunc("PATCH /api/v1/itineraries/{id}/guests", h.UpdateGuests)
 
 	if ussdStore, ok := store.(ussdDataStore); ok {

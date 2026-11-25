@@ -130,6 +130,30 @@ definitions:
           $ref: '#/definitions/models.GuestInput'
         type: array
     type: object
+  models.UpdateItineraryRequest:
+    properties:
+      group_name:
+        type: string
+      guests:
+        items:
+          $ref: '#/definitions/models.GuestInput'
+        type: array
+      stops:
+        items:
+          $ref: '#/definitions/models.UpdateStopInput'
+        type: array
+    type: object
+  models.UpdateStopInput:
+    properties:
+      check_in_date:
+        type: string
+      chef_phone:
+        type: string
+      id:
+        type: integer
+      lodge_name:
+        type: string
+    type: object
 info:
   contact:
     email: support@dineware.local
@@ -194,6 +218,32 @@ paths:
       tags:
       - itineraries
   /api/v1/itineraries/{id}:
+    delete:
+      description: Deletes a trip and cascades to its lodge stops and guest manifest.
+      parameters:
+      - description: Itinerary ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: Itinerary deleted
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Delete an itinerary
+      tags:
+      - itineraries
     get:
       description: Retrieves a specific itinerary with all stops and guest dietary
         manifests.
@@ -219,6 +269,44 @@ paths:
           schema:
             $ref: '#/definitions/models.ErrorResponse'
       summary: Get safari itinerary by ID
+      tags:
+      - itineraries
+    put:
+      consumes:
+      - application/json
+      description: Updates a trip's group name, lodge stops, and guest manifest.
+      parameters:
+      - description: Itinerary ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Updated itinerary details
+        in: body
+        name: itinerary
+        required: true
+        schema:
+          $ref: '#/definitions/models.UpdateItineraryRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Itinerary'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Update an itinerary
       tags:
       - itineraries
   /api/v1/itineraries/{id}/guests:

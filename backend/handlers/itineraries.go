@@ -148,6 +148,133 @@ func (h *Handler) GetItinerary(w http.ResponseWriter, r *http.Request) {
 	WriteJSON(w, http.StatusOK, it)
 }
 
+// UpdateItinerary replaces the editable itinerary details.
+// @Summary      Update an itinerary
+// @Description  Updates a trip's group name, lodge stops, and guest manifest.
+// @Tags         itineraries
+// @Accept       json
+// @Produce      json
+// @Param        id         path      string                         true  "Itinerary ID"
+// @Param        itinerary  body      models.UpdateItineraryRequest  true  "Updated itinerary details"
+// @Success      200        {object}  models.Itinerary
+// @Failure      400        {object}  models.ErrorResponse
+// @Failure      404        {object}  models.ErrorResponse
+// @Failure      500        {object}  models.ErrorResponse
+// @Router       /api/v1/itineraries/{id} [put]
+func (h *Handler) UpdateItinerary(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPut {
+		WriteError(w, http.StatusMethodNotAllowed, "method not allowed", "")
+		return
+	}
+
+	id := ExtractID(r, "/api/v1/itineraries/", "")
+	if id == "" {
+		WriteError(w, http.StatusBadRequest, "missing itinerary ID", "")
+		return
+	}
+
+	var req models.UpdateItineraryRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		WriteError(w, http.StatusBadRequest, "invalid request body", err.Error())
+		return
+	}
+	if strings.TrimSpace(req.GroupName) == "" {
+		WriteError(w, http.StatusBadRequest, "group_name is required", "")
+		return
+	}
+	if len(req.Stops) == 0 {
+		WriteError(w, http.StatusBadRequest, "at least one lodge stop is required", "")
+		return
+	}
+	for i, stop := range req.Stops {
+		if stop.ID < 0 {
+			WriteError(w, http.StatusBadRequest, "invalid stop ID", "")
+			return
+		}
+		if strings.TrimSpace(stop.LodgeName) == "" || strings.TrimSpace(stop.ChefPhone) == "" {
+			WriteError(w, http.StatusBadRequest, "each stop requires a lodge name and chef phone number", "")
+			return
+		}
+		if _, err := time.Parse("2006-01-02", stop.CheckInDate); err != nil {
+			WriteError(w, http.StatusBadRequest, "invalid check_in_date format (expected YYYY-MM-DD)", "stop index: "+string(rune('0'+i)))
+			return
+		}
+	}
+	if len(req.Guests) == 0 {
+		WriteError(w, http.StatusBadRequest, "at least one guest is required in the manifest", "")
+		return
+	}
+	for _, guest := range req.Guests {
+		if strings.TrimSpace(guest.Name) == "" {
+			WriteError(w, http.StatusBadRequest, "name is required for each guest", "")
+			return
+		}
+	}
+
+	updated, dispatchDueStops, err := h.store.UpdateItinerary(r.Context(), id, req)
+	if err != nil {
+		switch {
+		case errors.Is(err, db.ErrNotFound):
+			WriteError(w, http.StatusNotFound, "itinerary not found", "")
+		case errors.Is(err, db.ErrEmptyGroupName), errors.Is(err, db.ErrEmptyStops),
+			errors.Is(err, db.ErrEmptyGuests), errors.Is(err, db.ErrInvalidStopID),
+			errors.Is(err, db.ErrDuplicateStop):
+			WriteError(w, http.StatusBadRequest, err.Error(), "")
+		default:
+			WriteError(w, http.StatusInternalServerError, "failed to update itinerary", err.Error())
+		}
+		return
+	}
+
+	if dispatchDueStops && h.dispatcher != nil {
+		ctx, cancel := context.WithTimeout(r.Context(), 12*time.Second)
+		if err := h.dispatcher.Run(ctx); err != nil {
+			log.Printf("dispatcher: immediate post-update cycle failed: %v", err)
+		}
+		cancel()
+		if latest, err := h.store.GetItinerary(r.Context(), id); err != nil {
+			log.Printf("failed to refresh itinerary after dispatch: %v", err)
+		} else {
+			updated = latest
+		}
+	}
+
+	WriteJSON(w, http.StatusOK, updated)
+}
+
+// DeleteItinerary deletes an itinerary and its associated stops and guests.
+// @Summary      Delete an itinerary
+// @Description  Deletes a trip and cascades to its lodge stops and guest manifest.
+// @Tags         itineraries
+// @Param        id   path      string  true  "Itinerary ID"
+// @Success      204  "Itinerary deleted"
+// @Failure      400  {object}  models.ErrorResponse
+// @Failure      404  {object}  models.ErrorResponse
+// @Failure      500  {object}  models.ErrorResponse
+// @Router       /api/v1/itineraries/{id} [delete]
+func (h *Handler) DeleteItinerary(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		WriteError(w, http.StatusMethodNotAllowed, "method not allowed", "")
+		return
+	}
+
+	id := ExtractID(r, "/api/v1/itineraries/", "")
+	if id == "" {
+		WriteError(w, http.StatusBadRequest, "missing itinerary ID", "")
+		return
+	}
+	if err := h.store.DeleteItinerary(r.Context(), id); err != nil {
+		if errors.Is(err, db.ErrNotFound) {
+			WriteError(w, http.StatusNotFound, "itinerary not found", "")
+			return
+		}
+		WriteError(w, http.StatusInternalServerError, "failed to delete itinerary", err.Error())
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // UpdateGuests updates guest counts or allergy manifests for an active safari itinerary mid-trip.
 // @Summary      Update guest count or allergies mid-trip
 // @Description  Dynamically updates the guest allergy manifest and count for an active multi-lodge itinerary.

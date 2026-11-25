@@ -25,6 +25,8 @@ var (
 	ErrEmptyGroupName = errors.New("group_name is required")
 	ErrEmptyStops     = errors.New("at least one stop is required")
 	ErrEmptyGuests    = errors.New("at least one guest is required")
+	ErrInvalidStopID  = errors.New("stop does not belong to itinerary")
+	ErrDuplicateStop  = errors.New("stop ID appears more than once")
 )
 
 // Store provides an abstraction for data persistence operations.
@@ -32,6 +34,8 @@ type Store interface {
 	CreateItinerary(ctx context.Context, req models.CreateItineraryRequest) (*models.Itinerary, error)
 	ListItineraries(ctx context.Context) ([]models.Itinerary, error)
 	GetItinerary(ctx context.Context, id string) (*models.Itinerary, error)
+	UpdateItinerary(ctx context.Context, id string, req models.UpdateItineraryRequest) (*models.Itinerary, bool, error)
+	DeleteItinerary(ctx context.Context, id string) error
 	UpdateGuests(ctx context.Context, itineraryID string, guests []models.GuestInput) (*models.Itinerary, error)
 	Ping(ctx context.Context) error
 	Close() error
@@ -63,6 +67,12 @@ type PendingStop struct {
 	LodgeName   string
 	CheckInDate string
 	GuestCount  int
+}
+
+func isWithinDispatchWindow(checkInDate string, window time.Duration) bool {
+	now := time.Now()
+	return checkInDate >= now.Format("2006-01-02") &&
+		checkInDate <= now.Add(window).Format("2006-01-02")
 }
 
 // Connect establishes a pooled connection to Neon PostgreSQL and executes migrations.
@@ -342,6 +352,160 @@ func (s *PostgresStore) GetItinerary(ctx context.Context, id string) (*models.It
 	it.Guests = guests
 
 	return &it, nil
+}
+
+func (s *PostgresStore) UpdateItinerary(ctx context.Context, itineraryID string, req models.UpdateItineraryRequest) (*models.Itinerary, bool, error) {
+	if strings.TrimSpace(req.GroupName) == "" {
+		return nil, false, ErrEmptyGroupName
+	}
+	if len(req.Stops) == 0 {
+		return nil, false, ErrEmptyStops
+	}
+	if len(req.Guests) == 0 {
+		return nil, false, ErrEmptyGuests
+	}
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, false, fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	var createdAt, updatedAt time.Time
+	err = tx.QueryRowContext(ctx, `
+		UPDATE itineraries
+		SET group_name = $2, updated_at = CURRENT_TIMESTAMP
+		WHERE id = $1
+		RETURNING created_at, updated_at`, itineraryID, req.GroupName).Scan(&createdAt, &updatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, false, ErrNotFound
+	}
+	if err != nil {
+		return nil, false, fmt.Errorf("update itinerary: %w", err)
+	}
+
+	rows, err := tx.QueryContext(ctx, `
+		SELECT id, itinerary_id, lodge_name, chef_phone, TO_CHAR(check_in_date, 'YYYY-MM-DD'),
+		       notification_sent, chef_confirmed
+		FROM itinerary_stops
+		WHERE itinerary_id = $1
+		FOR UPDATE`, itineraryID)
+	if err != nil {
+		return nil, false, fmt.Errorf("query existing stops: %w", err)
+	}
+	existingStops := make(map[int]models.Stop)
+	for rows.Next() {
+		var stop models.Stop
+		if err := rows.Scan(&stop.ID, &stop.ItineraryID, &stop.LodgeName, &stop.ChefPhone,
+			&stop.CheckInDate, &stop.NotificationSent, &stop.ChefConfirmed); err != nil {
+			rows.Close()
+			return nil, false, fmt.Errorf("scan existing stop: %w", err)
+		}
+		existingStops[stop.ID] = stop
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return nil, false, fmt.Errorf("iterate existing stops: %w", err)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, false, fmt.Errorf("close existing stops: %w", err)
+	}
+
+	retainedStops := make(map[int]bool, len(req.Stops))
+	dispatchDueStops := false
+	for _, stop := range req.Stops {
+		if stop.ID == 0 {
+			_, err := tx.ExecContext(ctx, `
+				INSERT INTO itinerary_stops (itinerary_id, lodge_name, chef_phone, check_in_date)
+				VALUES ($1, $2, $3, $4)`, itineraryID, stop.LodgeName, stop.ChefPhone, stop.CheckInDate)
+			if err != nil {
+				return nil, false, fmt.Errorf("insert new stop: %w", err)
+			}
+			if isWithinDispatchWindow(stop.CheckInDate, 72*time.Hour) {
+				dispatchDueStops = true
+			}
+			continue
+		}
+
+		if retainedStops[stop.ID] {
+			return nil, false, ErrDuplicateStop
+		}
+		oldStop, exists := existingStops[stop.ID]
+		if !exists {
+			return nil, false, ErrInvalidStopID
+		}
+		retainedStops[stop.ID] = true
+
+		dateChanged := oldStop.CheckInDate != stop.CheckInDate
+		phoneChanged := oldStop.ChefPhone != stop.ChefPhone
+		contactOrDateChanged := dateChanged || phoneChanged
+		withinWindow := isWithinDispatchWindow(stop.CheckInDate, 72*time.Hour)
+		if contactOrDateChanged && withinWindow {
+			dispatchDueStops = true
+		}
+
+		_, err := tx.ExecContext(ctx, `
+			UPDATE itinerary_stops
+			SET lodge_name = $1,
+			    chef_phone = $2,
+			    check_in_date = $3,
+			    notification_sent = CASE WHEN $4 THEN FALSE ELSE notification_sent END,
+			    chef_confirmed = CASE WHEN $5 THEN FALSE ELSE chef_confirmed END
+			WHERE id = $6 AND itinerary_id = $7`,
+			stop.LodgeName, stop.ChefPhone, stop.CheckInDate,
+			contactOrDateChanged && withinWindow, contactOrDateChanged, stop.ID, itineraryID)
+		if err != nil {
+			return nil, false, fmt.Errorf("update stop %d: %w", stop.ID, err)
+		}
+	}
+
+	for stopID := range existingStops {
+		if !retainedStops[stopID] {
+			if _, err := tx.ExecContext(ctx, `DELETE FROM itinerary_stops WHERE id = $1 AND itinerary_id = $2`,
+				stopID, itineraryID); err != nil {
+				return nil, false, fmt.Errorf("delete removed stop %d: %w", stopID, err)
+			}
+		}
+	}
+
+	if _, err := tx.ExecContext(ctx, `DELETE FROM guests WHERE itinerary_id = $1`, itineraryID); err != nil {
+		return nil, false, fmt.Errorf("delete old guests: %w", err)
+	}
+	for _, guest := range req.Guests {
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO guests (itinerary_id, name, allergies, dietary_requirements)
+			VALUES ($1, $2, $3, $4)`,
+			itineraryID, guest.Name, guest.Allergies, guest.DietaryRequirements); err != nil {
+			return nil, false, fmt.Errorf("insert updated guest: %w", err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, false, fmt.Errorf("commit tx: %w", err)
+	}
+
+	updated, err := s.GetItinerary(ctx, itineraryID)
+	if err != nil {
+		return nil, false, err
+	}
+	updated.CreatedAt = createdAt
+	updated.UpdatedAt = updatedAt
+	return updated, dispatchDueStops, nil
+}
+
+func (s *PostgresStore) DeleteItinerary(ctx context.Context, itineraryID string) error {
+	result, err := s.db.ExecContext(ctx, `DELETE FROM itineraries WHERE id = $1`, itineraryID)
+	if err != nil {
+		return fmt.Errorf("delete itinerary: %w", err)
+	}
+	deleted, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("check deleted itinerary: %w", err)
+	}
+	if deleted == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 func (s *PostgresStore) UpdateGuests(ctx context.Context, itineraryID string, guests []models.GuestInput) (*models.Itinerary, error) {
@@ -667,6 +831,103 @@ func (m *MemoryStore) GetItinerary(ctx context.Context, id string) (*models.Itin
 	}
 	copyIt := *it
 	return &copyIt, nil
+}
+
+func (m *MemoryStore) UpdateItinerary(_ context.Context, itineraryID string, req models.UpdateItineraryRequest) (*models.Itinerary, bool, error) {
+	if strings.TrimSpace(req.GroupName) == "" {
+		return nil, false, ErrEmptyGroupName
+	}
+	if len(req.Stops) == 0 {
+		return nil, false, ErrEmptyStops
+	}
+	if len(req.Guests) == 0 {
+		return nil, false, ErrEmptyGuests
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	it, ok := m.itineraries[itineraryID]
+	if !ok {
+		return nil, false, ErrNotFound
+	}
+
+	existingStops := make(map[int]models.Stop, len(it.Stops))
+	for _, stop := range it.Stops {
+		existingStops[stop.ID] = stop
+	}
+	retainedStops := make(map[int]bool, len(req.Stops))
+	stops := make([]models.Stop, 0, len(req.Stops))
+	dispatchDueStops := false
+	for _, input := range req.Stops {
+		if input.ID == 0 {
+			stop := models.Stop{
+				ID:          m.nextStopID,
+				ItineraryID: itineraryID,
+				LodgeName:   input.LodgeName,
+				ChefPhone:   input.ChefPhone,
+				CheckInDate: input.CheckInDate,
+			}
+			m.nextStopID++
+			stops = append(stops, stop)
+			if isWithinDispatchWindow(stop.CheckInDate, 72*time.Hour) {
+				dispatchDueStops = true
+			}
+			continue
+		}
+
+		if retainedStops[input.ID] {
+			return nil, false, ErrDuplicateStop
+		}
+		stop, exists := existingStops[input.ID]
+		if !exists {
+			return nil, false, ErrInvalidStopID
+		}
+		retainedStops[input.ID] = true
+
+		contactOrDateChanged := stop.ChefPhone != input.ChefPhone || stop.CheckInDate != input.CheckInDate
+		withinWindow := isWithinDispatchWindow(input.CheckInDate, 72*time.Hour)
+		if contactOrDateChanged {
+			stop.ChefConfirmed = false
+			if withinWindow {
+				stop.NotificationSent = false
+				dispatchDueStops = true
+			}
+		}
+		stop.LodgeName = input.LodgeName
+		stop.ChefPhone = input.ChefPhone
+		stop.CheckInDate = input.CheckInDate
+		stops = append(stops, stop)
+	}
+
+	guests := make([]models.Guest, len(req.Guests))
+	for i, guest := range req.Guests {
+		guests[i] = models.Guest{
+			ID:                  i + 1,
+			ItineraryID:         itineraryID,
+			Name:                guest.Name,
+			Allergies:           guest.Allergies,
+			DietaryRequirements: guest.DietaryRequirements,
+		}
+	}
+
+	it.GroupName = req.GroupName
+	it.Stops = stops
+	it.Guests = guests
+	it.UpdatedAt = time.Now().UTC()
+	copyItinerary := *it
+	return &copyItinerary, dispatchDueStops, nil
+}
+
+func (m *MemoryStore) DeleteItinerary(_ context.Context, itineraryID string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if _, ok := m.itineraries[itineraryID]; !ok {
+		return ErrNotFound
+	}
+	delete(m.itineraries, itineraryID)
+	return nil
 }
 
 func (m *MemoryStore) UpdateGuests(ctx context.Context, itineraryID string, guests []models.GuestInput) (*models.Itinerary, error) {

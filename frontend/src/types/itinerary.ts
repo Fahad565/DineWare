@@ -48,6 +48,16 @@ export interface UpdateGuestsRequest {
   guests: GuestInput[];
 }
 
+export interface UpdateStopInput extends StopInput {
+  id?: number;
+}
+
+export interface UpdateItineraryRequest {
+  group_name: string;
+  stops: UpdateStopInput[];
+  guests: GuestInput[];
+}
+
 export type StopStatus = 'pending' | 'sms_sent' | 'confirmed';
 
 export function getStopStatus(stop: Stop): StopStatus {
