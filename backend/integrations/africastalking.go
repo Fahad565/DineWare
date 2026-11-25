@@ -2,7 +2,7 @@
 //
 // STRICT PRIVACY RULE: Outbound SMS messages must NEVER contain sensitive health or
 // dietary data (allergy names, dietary conditions, etc.). Only itinerary reference code,
-// guest count, arrival date, and a prompt to dial *384*44# may appear in SMS payloads.
+// guest count, arrival date, and a prompt to dial the configured USSD code may appear in SMS payloads.
 // Sensitive manifest data is revealed exclusively inside authenticated USSD sessions.
 package integrations
 
@@ -20,7 +20,7 @@ import (
 // smsBaseURL is the Africa's Talking SMS endpoint.
 const smsBaseURL = "https://api.africastalking.com/version1/messaging"
 const smsSandboxBaseURL = "https://api.sandbox.africastalking.com/version1/messaging"
-const defaultUSSDCode = "*384*44#"
+const defaultUSSDCode = "*384*95853#"
 const defaultPortalURL = "https://dineware-operator-portal.onrender.com"
 
 // ATConfig contains Africa's Talking credentials and message configuration.
@@ -396,9 +396,9 @@ func HandleUSSD(ctx context.Context, req USSDRequest, provider GuestManifestProv
 			return "END Confirmed. Manifest receipt logged for your lodge. Safe travels!"
 
 		default:
-			return "END Invalid selection. Please dial *384*44# and choose 1 or 2."
+			return "END Invalid selection. Please dial *384*95853# and choose 1 or 2."
 		}
 	}
 
-	return "END Invalid input. Please dial *384*44# to start again."
+	return "END Invalid input. Please dial *384*95853# to start again."
 }

@@ -12,7 +12,7 @@ Modern safari lodges increasingly rely on cloud-based booking systems to manage 
 ## 🛠️ Solution Methodology
 DineWare bridges the operational gap between connected safari tour operators and disconnected bush kitchens through a two-tiered notification and retrieval architecture:
 1. **Asynchronous Date-Staggered SMS Triggers:** A backend engine constantly monitors multi-lodge guest itineraries and fires a targeted, privacy-compliant Africa's Talking bulk SMS alert to a lodge's head chef exactly **72 hours prior to arrival**. This SMS contains *only* non-sensitive tracking markers: property-specific itinerary reference, guest count, and arrival date. No data links or web URLs are required.
-2. **Secure Offline GSM Manifest Queries:** Upon receiving the SMS trigger, the chef dials an authenticated shortcode (`*384*44#`) using the standard GSM signaling channel. The request maps through Africa's Talking USSD gateway to our highly concurrent Go-engine backend, validating the kitchen's identity and pulling fresh guest manifests directly from Neon PostgreSQL, keeping sensitive health profiles secure without an active internet setup.
+2. **Secure Offline GSM Manifest Queries:** Upon receiving the SMS trigger, the chef dials an authenticated shortcode (`*384*95853#`) using the standard GSM signaling channel. The request maps through Africa's Talking USSD gateway to our highly concurrent Go-engine backend, validating the kitchen's identity and pulling fresh guest manifests directly from Neon PostgreSQL, keeping sensitive health profiles secure without an active internet setup.
 
 ## 🧰 Technology Stack
 * **Frontend:** Next.js (TypeScript) - Managed web platform for Tour Operators to register and manage guest vectors.

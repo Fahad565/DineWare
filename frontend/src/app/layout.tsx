@@ -59,7 +59,7 @@ export default function RootLayout({
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex items-center space-x-2">
               <span className="w-2 h-2 rounded-full bg-emerald-600"></span>
-              <span>Kitchen updates work over SMS and USSD <code className="bg-stone-100 px-1.5 py-0.5 rounded text-stone-700 font-mono">*384*44#</code></span>
+              <span>Kitchen updates work over SMS and USSD <code className="bg-stone-100 px-1.5 py-0.5 rounded text-stone-700 font-mono">*384*95853#</code></span>
             </div>
             <div>
               DineWare · Safari Tourism Hackathon

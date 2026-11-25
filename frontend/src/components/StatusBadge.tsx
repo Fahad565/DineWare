@@ -21,7 +21,7 @@ export function StatusBadge({ status, size = 'md', showIcon = true }: StatusBadg
     return (
       <span
         className={`inline-flex items-center rounded-full font-sans font-medium border bg-emerald-50 text-emerald-800 border-emerald-200 ${sizeClasses[size]}`}
-        title="Chef confirmed manifest receipt via USSD shortcode *384*44# or secure web portal"
+        title="Chef confirmed manifest receipt via USSD shortcode *384*95853# or secure web portal"
       >
         {showIcon && <Check className="w-3.5 h-3.5 text-emerald-700 shrink-0" />}
         <span>Confirmed</span>

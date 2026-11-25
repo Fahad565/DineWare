@@ -199,7 +199,7 @@ func TestUSSDWebhookRoute(t *testing.T) {
 
 	form := url.Values{
 		"sessionId":   {"session-1"},
-		"serviceCode": {"*384*44#"},
+		"serviceCode": {"*384*95853#"},
 		"phoneNumber": {"+254700000001"},
 		"text":        {itinerary.ID},
 	}

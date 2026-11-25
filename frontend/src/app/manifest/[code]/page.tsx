@@ -456,12 +456,12 @@ export default function LodgeManifestPage() {
         </div>
         <div className="space-y-1">
           <h4 className="font-bold text-stone-900 text-sm">
-            Offline GSM Kitchen Fallback: Dial *384*44#
+            Offline GSM Kitchen Fallback: Dial *384*95853#
           </h4>
           <p>
             If satellite lounge Wi-Fi goes down or cellular data is unavailable, the head chef can dial{' '}
             <code className="bg-stone-100 text-amber-800 font-mono font-bold px-1.5 py-0.5 rounded border border-stone-300">
-              *384*44#
+              *384*95853#
             </code>{' '}
             from phone <code className="font-mono text-stone-900">{currentStop?.chef_phone || '+2547...'}</code>. Enter booking code{' '}
             <code className="bg-stone-100 text-amber-800 font-mono font-bold px-1.5 py-0.5 rounded border border-stone-300">

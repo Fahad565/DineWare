@@ -22,9 +22,9 @@ DineWare is an offline-first dietary and itinerary synchronization engine built 
 		1. Property-specific itinerary reference code.
 		2. Number of arriving guests.
 		3. Scheduled arrival date.
-		4. A prompt to retrieve the full manifest via USSD (*384*44#) or the secure web portal.
+		4. A prompt to retrieve the full manifest via USSD (*384*95853#) or the secure web portal.
 • Dual-Channel Manifest Retrieval (Offline USSD + Online Web):
-	• Offline Channel (USSD): Chefs dial the dedicated shortcode (*384*44#), authenticate their session, and enter the itinerary reference code to view detailed guest allergies, dietary needs, and meal counts without mobile data.
+	• Offline Channel (USSD): Chefs dial the dedicated shortcode (*384*95853#), authenticate their session, and enter the itinerary reference code to view detailed guest allergies, dietary needs, and meal counts without mobile data.
 	• Online Channel (Secure Web Page): For camps with intermittent or lounge connectivity, an authenticated web view provides a richer kitchen manifest dashboard.
 • Dynamic Multi-Lodge Propagation:
 	• When a tour operator modifies guest counts, cancellations, or allergy records mid-safari, downstream lodges whose 72-hour dispatch window has not yet triggered automatically receive the updated manifest.

@@ -189,7 +189,7 @@ func main() {
 	atMode := integrations.ResolveATMode(atConfig.Environment, atConfig.Username)
 	atUSSDCode := strings.TrimSpace(atConfig.USSDCode)
 	if atUSSDCode == "" {
-		atUSSDCode = "*384*44#"
+		atUSSDCode = "*384*95853#"
 	}
 	log.Printf("Africa's Talking mode=%s username=%s ussd=%s",
 		atMode, strings.TrimSpace(atConfig.Username), atUSSDCode)

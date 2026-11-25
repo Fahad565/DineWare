@@ -62,12 +62,12 @@ A. Outbound Staggered SMS (Cron / Worker Loop)
 • Payload Params:
 	• username: sandbox (or production username)
 	• to: +2547XXXXXXXX (Chef's Phone)
-	• message: "DineWare Alert: Group {group_name} (ID: {id}) arrives {check_in_date}. Dial *384*44# to confirm your kitchen manifest."
+	• message: "DineWare Alert: Group {group_name} (ID: {id}) arrives {check_in_date}. Dial *384*95853# to confirm your kitchen manifest."
 
 B. Inbound USSD Webhook Handler
 
 When a chef dials the shortcode, Africa's Talking sends an HTTP POST to the DineWare server.
-• Expected Request Body (Form URL Encoded):sessionId=ATId_123456...&serviceCode=*384*44#&phoneNumber=+2547XXXXXXXX&text=
+• Expected Request Body (Form URL Encoded):sessionId=ATId_123456...&serviceCode=*384*95853#&phoneNumber=+2547XXXXXXXX&text=
 • Engine Response Format: Must reply with pure plain text prefixed with CON (continue session) or END (terminate session).
 
 4. Core Logic Implementation Flow (USSD & SMS Router)

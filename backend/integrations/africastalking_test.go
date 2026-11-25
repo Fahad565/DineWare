@@ -56,7 +56,7 @@ func TestSMSContainsRequiredFields(t *testing.T) {
 		"itinerary reference code": itinID,
 		"group name":               group,
 		"arrival date":             date,
-		"USSD shortcode prompt":    "*384*44#",
+		"USSD shortcode prompt":    "*384*95853#",
 	}
 	for label, substr := range checks {
 		if !strings.Contains(msg, substr) {
@@ -217,7 +217,7 @@ func makeStub() *stubProvider {
 func TestUSSDLevel0RootMenu(t *testing.T) {
 	t.Parallel()
 	req := integrations.USSDRequest{
-		SessionID: "AT-SID-001", ServiceCode: "*384*44#", PhoneNumber: "+254711000001", Text: "",
+		SessionID: "AT-SID-001", ServiceCode: "*384*95853#", PhoneNumber: "+254711000001", Text: "",
 	}
 	resp := integrations.HandleUSSD(context.Background(), req, makeStub())
 	if !strings.HasPrefix(resp, "CON") {
@@ -233,7 +233,7 @@ func TestUSSDLevel0RootMenu(t *testing.T) {
 func TestUSSDLevel1ValidCode(t *testing.T) {
 	t.Parallel()
 	req := integrations.USSDRequest{
-		SessionID: "AT-SID-001", ServiceCode: "*384*44#", PhoneNumber: "+254711000001", Text: "ITIN-2026-001",
+		SessionID: "AT-SID-001", ServiceCode: "*384*95853#", PhoneNumber: "+254711000001", Text: "ITIN-2026-001",
 	}
 	resp := integrations.HandleUSSD(context.Background(), req, makeStub())
 	if !strings.HasPrefix(resp, "CON") {
@@ -256,7 +256,7 @@ func TestUSSDLevel1ValidCode(t *testing.T) {
 func TestUSSDLevel1InvalidCode(t *testing.T) {
 	t.Parallel()
 	req := integrations.USSDRequest{
-		SessionID: "AT-SID-002", ServiceCode: "*384*44#", PhoneNumber: "+254711000001", Text: "ITIN-WRONG",
+		SessionID: "AT-SID-002", ServiceCode: "*384*95853#", PhoneNumber: "+254711000001", Text: "ITIN-WRONG",
 	}
 	resp := integrations.HandleUSSD(context.Background(), req, makeStub())
 	if !strings.HasPrefix(resp, "END") {
@@ -269,7 +269,7 @@ func TestUSSDLevel1InvalidCode(t *testing.T) {
 func TestUSSDLevel2Option1ViewManifest(t *testing.T) {
 	t.Parallel()
 	req := integrations.USSDRequest{
-		SessionID: "AT-SID-001", ServiceCode: "*384*44#", PhoneNumber: "+254711000001",
+		SessionID: "AT-SID-001", ServiceCode: "*384*95853#", PhoneNumber: "+254711000001",
 		Text: "ITIN-2026-001*1",
 	}
 	resp := integrations.HandleUSSD(context.Background(), req, makeStub())
@@ -290,7 +290,7 @@ func TestUSSDLevel2Option1ViewManifest(t *testing.T) {
 func TestUSSDLevel2Option2ConfirmManifest(t *testing.T) {
 	t.Parallel()
 	req := integrations.USSDRequest{
-		SessionID: "AT-SID-001", ServiceCode: "*384*44#", PhoneNumber: "+254711000001",
+		SessionID: "AT-SID-001", ServiceCode: "*384*95853#", PhoneNumber: "+254711000001",
 		Text: "ITIN-2026-001*2",
 	}
 	resp := integrations.HandleUSSD(context.Background(), req, makeStub())
@@ -306,7 +306,7 @@ func TestUSSDLevel2Option2ConfirmManifest(t *testing.T) {
 func TestUSSDLevel2InvalidOption(t *testing.T) {
 	t.Parallel()
 	req := integrations.USSDRequest{
-		SessionID: "AT-SID-001", ServiceCode: "*384*44#", PhoneNumber: "+254711000001",
+		SessionID: "AT-SID-001", ServiceCode: "*384*95853#", PhoneNumber: "+254711000001",
 		Text: "ITIN-2026-001*9",
 	}
 	resp := integrations.HandleUSSD(context.Background(), req, makeStub())
@@ -320,7 +320,7 @@ func TestUSSDLevel2InvalidOption(t *testing.T) {
 func TestUSSDWrongPhoneNumberDenied(t *testing.T) {
 	t.Parallel()
 	req := integrations.USSDRequest{
-		SessionID: "AT-SID-003", ServiceCode: "*384*44#", PhoneNumber: "+254799999999", // wrong phone
+		SessionID: "AT-SID-003", ServiceCode: "*384*95853#", PhoneNumber: "+254799999999", // wrong phone
 		Text: "ITIN-2026-001",
 	}
 	resp := integrations.HandleUSSD(context.Background(), req, makeStub())
