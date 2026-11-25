@@ -83,20 +83,21 @@ func TestSMSBlocksInjectedAllergyContent(t *testing.T) {
 func TestSendSMSCallsATEndpoint(t *testing.T) {
 	t.Parallel()
 
-	var capturedBody, capturedAPIKey string
+	var capturedBody, capturedAPIKey, capturedUsername string
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		capturedAPIKey = r.Header.Get("ApiKey")
 		if err := r.ParseForm(); err != nil {
 			t.Errorf("server: ParseForm error: %v", err)
 		}
+		capturedUsername = r.FormValue("username")
 		capturedBody = r.FormValue("message")
 		w.WriteHeader(http.StatusCreated)
 		w.Write([]byte(`{"SMSMessageData":{"Message":"Sent to 1/1 Total Cost: KES 0.8000"}}`))
 	}))
 	defer srv.Close()
 
-	client := integrations.NewATClientWithBaseURL("sandbox", "test-api-key", srv.URL)
+	client := integrations.NewATClientWithBaseURL(" sandbox ", " test-api-key ", srv.URL)
 	err := client.SendSMS(context.Background(), "+254711000001", "ITIN-2026-001", "Smith Safari", 4, "2026-12-01")
 	if err != nil {
 		t.Fatalf("SendSMS returned error: %v", err)
@@ -104,6 +105,9 @@ func TestSendSMSCallsATEndpoint(t *testing.T) {
 
 	if capturedAPIKey != "test-api-key" {
 		t.Errorf("expected ApiKey header 'test-api-key', got %q", capturedAPIKey)
+	}
+	if capturedUsername != "sandbox" {
+		t.Errorf("expected username 'sandbox', got %q", capturedUsername)
 	}
 
 	lower := strings.ToLower(capturedBody)

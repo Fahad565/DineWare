@@ -1,8 +1,10 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -75,6 +77,14 @@ func (h *Handler) CreateItinerary(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		WriteError(w, http.StatusInternalServerError, "failed to create itinerary", err.Error())
 		return
+	}
+
+	if h.dispatcher != nil {
+		ctx, cancel := context.WithTimeout(r.Context(), 12*time.Second)
+		if err := h.dispatcher.Run(ctx); err != nil {
+			log.Printf("dispatcher: immediate post-create cycle failed: %v", err)
+		}
+		cancel()
 	}
 
 	WriteJSON(w, http.StatusCreated, itinerary)

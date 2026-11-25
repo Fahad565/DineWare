@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -11,12 +12,18 @@ import (
 
 // Handler holds dependencies for HTTP route handlers.
 type Handler struct {
-	store db.Store
+	store      db.Store
+	dispatcher DueStopDispatcher
+}
+
+// DueStopDispatcher evaluates pending stop notifications.
+type DueStopDispatcher interface {
+	Run(context.Context) error
 }
 
 // NewHandler constructs a new Handler instance.
-func NewHandler(store db.Store) *Handler {
-	return &Handler{store: store}
+func NewHandler(store db.Store, dispatcher DueStopDispatcher) *Handler {
+	return &Handler{store: store, dispatcher: dispatcher}
 }
 
 // WriteJSON sends a JSON response with status code.

@@ -3,10 +3,12 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -33,9 +35,9 @@ import (
 // @BasePath        /
 
 // SetupRouter initializes application routes, Swagger UI, and middleware.
-func SetupRouter(store db.Store) http.Handler {
+func SetupRouter(store db.Store, dispatcher handlers.DueStopDispatcher) http.Handler {
 	mux := http.NewServeMux()
-	h := handlers.NewHandler(store)
+	h := handlers.NewHandler(store, dispatcher)
 
 	// Health endpoint
 	mux.HandleFunc("GET /health", h.Health)
@@ -172,14 +174,20 @@ func main() {
 		store = db.NewMemoryStore()
 	}
 
-	atClient := integrations.NewATClient(os.Getenv("AT_USERNAME"), os.Getenv("AT_API_KEY"))
+	atUsername := strings.TrimSpace(os.Getenv("AT_USERNAME"))
+	atAPIKey := strings.TrimSpace(os.Getenv("AT_API_KEY"))
+	fmt.Printf("Africa's Talking configuration: AT_USERNAME=%q, AT_API_KEY configured=%t\n",
+		atUsername, atAPIKey != "")
+	atClient := integrations.NewATClient(atUsername, atAPIKey)
 	workerCtx, stopWorker := context.WithCancel(context.Background())
 	workerDone := make(chan struct{})
+	var dispatcher handlers.DueStopDispatcher
 	if repository, ok := store.(dispatchDataStore); ok {
-		dispatcher := worker.NewDispatcher(stopRepository{store: repository}, worker.NewATSMSSender(atClient), log.Default())
+		d := worker.NewDispatcher(stopRepository{store: repository}, worker.NewATSMSSender(atClient), log.Default())
+		dispatcher = d
 		go func() {
 			defer close(workerDone)
-			runDispatcher(workerCtx, dispatcher)
+			runDispatcher(workerCtx, d)
 		}()
 	} else {
 		log.Println("SMS dispatcher is unavailable: configured store does not support stop queries")
@@ -187,7 +195,7 @@ func main() {
 	}
 	defer stopWorker()
 
-	router := SetupRouter(store)
+	router := SetupRouter(store, dispatcher)
 	server := &http.Server{
 		Addr:         ":" + port,
 		Handler:      router,

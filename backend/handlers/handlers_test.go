@@ -14,7 +14,7 @@ import (
 
 func newTestMux() (http.Handler, db.Store) {
 	store := db.NewMemoryStore()
-	h := handlers.NewHandler(store)
+	h := handlers.NewHandler(store, nil)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", h.Health)

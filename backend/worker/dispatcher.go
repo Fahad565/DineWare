@@ -53,9 +53,10 @@ type SMSSender interface {
 
 // Dispatcher evaluates pending stops and fires staggered, privacy-safe SMS alerts.
 type Dispatcher struct {
-	repo   StopRepository
-	sms    SMSSender
-	logger *log.Logger
+	repo    StopRepository
+	sms     SMSSender
+	logger  *log.Logger
+	runLock chan struct{}
 }
 
 // NewDispatcher constructs a Dispatcher with the given dependencies.
@@ -63,7 +64,7 @@ func NewDispatcher(repo StopRepository, sms SMSSender, logger *log.Logger) *Disp
 	if logger == nil {
 		logger = log.Default()
 	}
-	return &Dispatcher{repo: repo, sms: sms, logger: logger}
+	return &Dispatcher{repo: repo, sms: sms, logger: logger, runLock: make(chan struct{}, 1)}
 }
 
 // Run executes a single dispatch cycle. It queries for all pending stops within
@@ -77,6 +78,13 @@ func NewDispatcher(repo StopRepository, sms SMSSender, logger *log.Logger) *Disp
 //	    dispatcher.Run(ctx)
 //	}
 func (d *Dispatcher) Run(ctx context.Context) error {
+	select {
+	case d.runLock <- struct{}{}:
+		defer func() { <-d.runLock }()
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+
 	stops, err := d.repo.QueryPendingStops(ctx, DispatchWindow)
 	if err != nil {
 		return fmt.Errorf("dispatcher: query pending stops: %w", err)

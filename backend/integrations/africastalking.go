@@ -39,8 +39,8 @@ type ATClient struct {
 // NewATClient constructs an ATClient from the given credentials.
 func NewATClient(username, apiKey string) *ATClient {
 	return &ATClient{
-		username:   username,
-		apiKey:     apiKey,
+		username:   strings.TrimSpace(username),
+		apiKey:     strings.TrimSpace(apiKey),
 		baseURL:    smsBaseURL,
 		httpClient: &http.Client{Timeout: 10 * time.Second},
 	}
@@ -50,8 +50,8 @@ func NewATClient(username, apiKey string) *ATClient {
 // Use this in tests to point the client at an httptest.Server.
 func NewATClientWithBaseURL(username, apiKey, baseURL string) *ATClient {
 	return &ATClient{
-		username:   username,
-		apiKey:     apiKey,
+		username:   strings.TrimSpace(username),
+		apiKey:     strings.TrimSpace(apiKey),
 		baseURL:    baseURL,
 		httpClient: &http.Client{Timeout: 10 * time.Second},
 	}
@@ -123,11 +123,18 @@ func (c *ATClient) SendSMS(ctx context.Context, to, itineraryID, groupName strin
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
+		fmt.Printf("Africa's Talking SMS API request failed: %v\n", err)
 		return fmt.Errorf("SMS dispatch failed: %w", err)
 	}
 	defer resp.Body.Close()
 
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		fmt.Printf("Africa's Talking SMS API response read failed (HTTP %s): %v\n", resp.Status, err)
+		return fmt.Errorf("failed to read AT SMS API response: %w", err)
+	}
+	fmt.Printf("Africa's Talking SMS API response: HTTP %s; body=%s\n",
+		resp.Status, strings.TrimSpace(string(body)))
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("AT SMS API returned HTTP %d: %s", resp.StatusCode, string(body))
 	}
