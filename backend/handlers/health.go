@@ -15,8 +15,13 @@ import (
 // @Success      200  {object}  models.HealthResponse
 // @Router       /health [get]
 func (h *Handler) Health(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet && r.Method != "" {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
 		WriteError(w, http.StatusMethodNotAllowed, "method not allowed", "")
+		return
+	}
+
+	if r.Method == http.MethodHead {
+		WriteJSON(w, http.StatusOK, nil)
 		return
 	}
 

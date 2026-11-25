@@ -39,6 +39,7 @@ func SetupRouter(store db.Store) http.Handler {
 
 	// Health endpoint
 	mux.HandleFunc("GET /health", h.Health)
+	mux.HandleFunc("HEAD /health", h.Health)
 
 	// Itinerary endpoints
 	mux.HandleFunc("POST /api/v1/itineraries", h.CreateItinerary)

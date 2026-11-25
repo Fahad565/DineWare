@@ -25,6 +25,16 @@ func TestSetupRouterEndpoints(t *testing.T) {
 		t.Fatalf("expected 200 from /health, got %d", rec.Code)
 	}
 
+	headReq := httptest.NewRequest(http.MethodHead, "/health", nil)
+	headRec := httptest.NewRecorder()
+	router.ServeHTTP(headRec, headReq)
+	if headRec.Code != http.StatusOK {
+		t.Fatalf("expected 200 from HEAD /health, got %d", headRec.Code)
+	}
+	if headRec.Body.Len() != 0 {
+		t.Fatalf("expected an empty body from HEAD /health, got %q", headRec.Body.String())
+	}
+
 	// Test /swagger redirect
 	reqSwagger := httptest.NewRequest(http.MethodGet, "/swagger", nil)
 	recSwagger := httptest.NewRecorder()
