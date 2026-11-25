@@ -28,6 +28,8 @@ async function proxy(request: Request, { params }: RouteContext): Promise<Respon
     const value = request.headers.get(header);
     if (value) headers.set(header, value);
   }
+  headers.set('User-Agent', 'DineWare-Operator-Portal/1.0');
+  headers.set('Accept', 'application/json');
 
   try {
     const response = await fetch(backendURL, {

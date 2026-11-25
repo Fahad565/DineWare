@@ -4,6 +4,10 @@ const API_BASE_URL = '/api/backend';
 
 async function readError(res: Response): Promise<Error> {
   const body = await res.text();
+  const contentType = res.headers.get('content-type') || '';
+  if (contentType.includes('text/html') || /^\s*<!DOCTYPE html/i.test(body)) {
+    return new Error('Backend is waking up or challenged by edge proxy—click Retry in a few seconds.');
+  }
   return new Error(body || `Backend request failed with status ${res.status}`);
 }
 
