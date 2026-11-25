@@ -81,7 +81,7 @@ func (h *Handler) CreateItinerary(w http.ResponseWriter, r *http.Request) {
 
 	if h.dispatcher != nil {
 		ctx, cancel := context.WithTimeout(r.Context(), 12*time.Second)
-		if err := h.dispatcher.Run(ctx); err != nil {
+		if err := h.dispatcher.DispatchDueStops(ctx); err != nil {
 			log.Printf("dispatcher: immediate post-create cycle failed: %v", err)
 		}
 		cancel()
@@ -228,7 +228,7 @@ func (h *Handler) UpdateItinerary(w http.ResponseWriter, r *http.Request) {
 
 	if dispatchDueStops && h.dispatcher != nil {
 		ctx, cancel := context.WithTimeout(r.Context(), 12*time.Second)
-		if err := h.dispatcher.Run(ctx); err != nil {
+		if err := h.dispatcher.DispatchDueStops(ctx); err != nil {
 			log.Printf("dispatcher: immediate post-update cycle failed: %v", err)
 		}
 		cancel()

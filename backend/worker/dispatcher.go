@@ -78,6 +78,11 @@ func NewDispatcher(repo StopRepository, sms SMSSender, logger *log.Logger) *Disp
 //	    dispatcher.Run(ctx)
 //	}
 func (d *Dispatcher) Run(ctx context.Context) error {
+	return d.DispatchDueStops(ctx)
+}
+
+// DispatchDueStops evaluates pending stops and sends notifications in one cycle.
+func (d *Dispatcher) DispatchDueStops(ctx context.Context) error {
 	select {
 	case d.runLock <- struct{}{}:
 		defer func() { <-d.runLock }()
@@ -118,6 +123,12 @@ func (d *Dispatcher) Run(ctx context.Context) error {
 		case <-ctx.Done():
 			return ctx.Err()
 		default:
+		}
+
+		if stop.StopID <= 0 {
+			d.logger.Printf("dispatcher: invalid stop ID %d; skipping SMS to prevent duplicate delivery", stop.StopID)
+			failed++
+			continue
 		}
 
 		if err := d.sms.SendSMS(ctx, stop.ChefPhone, stop.ItineraryID, stop.GroupName, stop.GuestCount, stop.CheckInDate); err != nil {

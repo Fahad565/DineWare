@@ -18,7 +18,7 @@ type Handler struct {
 
 // DueStopDispatcher evaluates pending stop notifications.
 type DueStopDispatcher interface {
-	Run(context.Context) error
+	DispatchDueStops(context.Context) error
 }
 
 // NewHandler constructs a new Handler instance.

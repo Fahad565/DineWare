@@ -188,9 +188,10 @@ func TestMemoryStoreUSSDAndDispatcherQueries(t *testing.T) {
 	checkIn := time.Now().Add(24 * time.Hour).Format("2006-01-02")
 	itinerary, err := store.CreateItinerary(ctx, models.CreateItineraryRequest{
 		GroupName: "Safari Group",
-		Stops: []models.StopInput{{
-			LodgeName: "Mara Lodge", ChefPhone: "+254700000001", CheckInDate: checkIn,
-		}},
+		Stops: []models.StopInput{
+			{LodgeName: "Mara Lodge", ChefPhone: "+254700000001", CheckInDate: checkIn},
+			{LodgeName: "Second Lodge", ChefPhone: "+254700000002", CheckInDate: checkIn},
+		},
 		Guests: []models.GuestInput{{Name: "Guest", Allergies: "None"}},
 	})
 	if err != nil {
@@ -217,7 +218,7 @@ func TestMemoryStoreUSSDAndDispatcherQueries(t *testing.T) {
 	}
 
 	pending, err := store.QueryPendingStops(ctx, 72*time.Hour)
-	if err != nil || len(pending) != 1 || pending[0].ItineraryID != itinerary.ID {
+	if err != nil || len(pending) != 1 || pending[0].ItineraryID != itinerary.ID || pending[0].ChefPhone != "+254700000002" {
 		t.Fatalf("unexpected pending stops: stops=%+v err=%v", pending, err)
 	}
 	if err := store.MarkNotificationSent(ctx, pending[0].StopID); err != nil {

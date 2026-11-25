@@ -682,6 +682,7 @@ func (s *PostgresStore) QueryPendingStops(ctx context.Context, within time.Durat
 		JOIN itineraries i ON i.id = st.itinerary_id
 		LEFT JOIN guests g ON g.itinerary_id = i.id
 		WHERE st.notification_sent = FALSE
+		  AND st.chef_confirmed = FALSE
 		  AND st.check_in_date >= CURRENT_DATE
 		  AND st.check_in_date <= $1::date
 		GROUP BY st.id, i.id, i.group_name, st.chef_phone, st.lodge_name, st.check_in_date
@@ -708,17 +709,26 @@ func (s *PostgresStore) QueryPendingStops(ctx context.Context, within time.Durat
 }
 
 // MarkNotificationSent records successful notification delivery for a stop.
-func (s *PostgresStore) MarkNotificationSent(ctx context.Context, stopID int) error {
-	result, err := s.db.ExecContext(ctx, `UPDATE itinerary_stops SET notification_sent = TRUE WHERE id = $1`, stopID)
+func (s *PostgresStore) MarkNotificationSent(_ context.Context, stopID int) error {
+	updateCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	result, err := s.db.ExecContext(updateCtx, `
+		UPDATE itinerary_stops
+		SET notification_sent = TRUE
+		WHERE id = $1`, stopID)
 	if err != nil {
+		log.Printf("ERROR: failed to mark stop %d notification_sent=true: %v", stopID, err)
 		return fmt.Errorf("mark notification sent: %w", err)
 	}
 	updated, err := result.RowsAffected()
 	if err != nil {
+		log.Printf("ERROR: failed to check notification update for stop %d: %v", stopID, err)
 		return fmt.Errorf("check notification update: %w", err)
 	}
 	if updated == 0 {
-		return ErrNotFound
+		log.Printf("ERROR: marking stop %d notified affected zero rows", stopID)
+		return fmt.Errorf("mark notification sent for stop %d: %w", stopID, ErrNotFound)
 	}
 	return nil
 }
@@ -1030,7 +1040,7 @@ func (m *MemoryStore) QueryPendingStops(_ context.Context, within time.Duration)
 	var pending []PendingStop
 	for _, it := range m.itineraries {
 		for _, stop := range it.Stops {
-			if stop.NotificationSent || stop.CheckInDate < today || stop.CheckInDate > cutoff {
+			if stop.NotificationSent || stop.ChefConfirmed || stop.CheckInDate < today || stop.CheckInDate > cutoff {
 				continue
 			}
 			pending = append(pending, PendingStop{

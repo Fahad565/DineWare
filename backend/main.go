@@ -142,7 +142,7 @@ func runDispatcher(ctx context.Context, dispatcher *worker.Dispatcher) {
 	defer ticker.Stop()
 
 	for {
-		if err := dispatcher.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+		if err := dispatcher.DispatchDueStops(ctx); err != nil && !errors.Is(err, context.Canceled) {
 			log.Printf("SMS dispatcher cycle failed: %v", err)
 		}
 		select {
