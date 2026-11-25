@@ -155,7 +155,7 @@ func TestUpdateItineraryImmediatelyDispatchesChangedDueStop(t *testing.T) {
 		GroupName: "Safari Group",
 		Stops: []models.UpdateStopInput{{
 			ID: created.Stops[0].ID, LodgeName: "Mara Lodge",
-			ChefPhone: "+254700000009",
+			ChefPhone:   "+254700000009",
 			CheckInDate: time.Now().Add(24 * time.Hour).Format("2006-01-02"),
 		}},
 		Guests: []models.GuestInput{{Name: "Guest", Allergies: "None"}},
