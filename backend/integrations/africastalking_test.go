@@ -137,6 +137,22 @@ func TestSendSMSCallsATEndpoint(t *testing.T) {
 
 }
 
+func TestSendSMSAcceptsProductionSuccessStatusCode100(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{"SMSMessageData":{"Recipients":[{"statusCode":100,"number":"+254711000001","status":"Success"}]}}`))
+	}))
+	defer srv.Close()
+
+	client := integrations.NewATClientWithBaseURL("production", "test-api-key", srv.URL)
+	err := client.SendSMS(context.Background(), "+254711000001", "ITIN-2026-001", "Smith Safari", 4, "2026-12-01")
+	if err != nil {
+		t.Fatalf("SendSMS rejected a successful production response: %v", err)
+	}
+}
+
 func TestSendSMSRejectsRecipientEvenWhenHTTPIsCreated(t *testing.T) {
 	tests := []struct {
 		name      string

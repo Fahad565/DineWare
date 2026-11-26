@@ -248,8 +248,8 @@ func (c *ATClient) SendSMS(ctx context.Context, to, itineraryID, groupName strin
 	successfulRecipients := 0
 	for _, recipient := range result.SMSMessageData.Recipients {
 		status := strings.TrimSpace(recipient.Status)
-		statusSuccess := strings.EqualFold(status, "Success")
-		if recipient.StatusCode == 403 || (recipient.StatusCode != 0 && recipient.StatusCode != 101) {
+		statusSuccess := strings.EqualFold(status, "Success") || strings.EqualFold(status, "Sent")
+		if recipient.StatusCode == 403 {
 			number := recipient.Number
 			if number == "" {
 				number = to
@@ -262,7 +262,8 @@ func (c *ATClient) SendSMS(ctx context.Context, to, itineraryID, groupName strin
 			}
 			return fmt.Errorf("recipient %s rejected: %s (%d)", number, status, recipient.StatusCode)
 		}
-		if recipient.StatusCode == 101 || statusSuccess {
+		if recipient.StatusCode == 100 || recipient.StatusCode == 101 ||
+			(recipient.StatusCode == 0 && statusSuccess) {
 			successfulRecipients++
 			continue
 		}
