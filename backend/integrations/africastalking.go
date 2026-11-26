@@ -336,6 +336,9 @@ type GuestRecord struct {
 //	Level 2 (two segments):
 //	  Option "1" → View allergy & dietary manifest (sensitive, inside authenticated session).
 //	  Option "2" → Confirm manifest receipt (sets chef_confirmed = true).
+//	Level 3 (three segments):
+//	  "1*1" → Confirm manifest receipt.
+//	  "1*0" → Return to the action menu.
 func HandleUSSD(ctx context.Context, req USSDRequest, provider GuestManifestProvider) string {
 	parts := strings.Split(req.Text, "*")
 
@@ -352,15 +355,12 @@ func HandleUSSD(ctx context.Context, req USSDRequest, provider GuestManifestProv
 		if err != nil || stop == nil {
 			return "END Access Denied: Itinerary code not found or your number is not registered for this manifest. Please contact your tour operator."
 		}
-		return fmt.Sprintf(
-			"CON Manifest verified for %s (%s).\n%d guest(s) arriving %s.\n1. View Full Kitchen Manifest\n2. Confirm Manifest Receipt",
-			stop.LodgeName, itineraryCode, stop.GuestCount, stop.CheckInDate,
-		)
+		return manifestActionMenu(stop, itineraryCode)
 	}
 
-	// Level 2: deep menu action
-	if len(parts) == 2 {
-		action := strings.TrimSpace(parts[1])
+	// Level 2: menu action; level 3: follow-up after viewing the manifest.
+	if len(parts) == 2 || len(parts) == 3 {
+		action := strings.TrimSpace(parts[len(parts)-1])
 
 		// Re-authenticate at every deep level
 		stop, err := provider.GetStopByItineraryAndPhone(ctx, itineraryCode, req.PhoneNumber)
@@ -368,15 +368,19 @@ func HandleUSSD(ctx context.Context, req USSDRequest, provider GuestManifestProv
 			return "END Session expired or invalid. Please dial again."
 		}
 
-		switch action {
-		case "1":
+		if len(parts) == 3 && strings.TrimSpace(parts[1]) != "1" {
+			return "END Invalid selection. Please dial *384*95853# and choose 1 or 2."
+		}
+
+		switch {
+		case len(parts) == 2 && action == "1":
 			// Return detailed allergy/dietary manifest — ONLY safe inside USSD session
 			guests, err := provider.GetGuestsByItinerary(ctx, itineraryCode)
 			if err != nil || len(guests) == 0 {
 				return "END No guest manifest found. Contact tour operator."
 			}
 			var sb strings.Builder
-			sb.WriteString(fmt.Sprintf("END Manifest for %s (%d guests):\n", stop.GroupName, len(guests)))
+			sb.WriteString(fmt.Sprintf("CON Manifest for %s (%d guests):\n", stop.GroupName, len(guests)))
 			for i, g := range guests {
 				sb.WriteString(fmt.Sprintf("Guest %d: %s\n  Allergies: %s", i+1, g.Name, g.Allergies))
 				if g.DietaryRequirements != "" {
@@ -386,14 +390,18 @@ func HandleUSSD(ctx context.Context, req USSDRequest, provider GuestManifestProv
 					sb.WriteString("\n")
 				}
 			}
+			sb.WriteString("\n\n1. Confirm Manifest Receipt\n0. Back to Menu")
 			return sb.String()
 
-		case "2":
+		case (len(parts) == 2 && action == "2") || (len(parts) == 3 && action == "1"):
 			// Confirm manifest receipt — sets chef_confirmed = true in DB
 			if err := provider.ConfirmManifest(ctx, itineraryCode, req.PhoneNumber); err != nil {
 				return "END System error. Please try again or use the web portal."
 			}
 			return "END Confirmed. Manifest receipt logged for your lodge. Safe travels!"
+
+		case len(parts) == 3 && action == "0":
+			return manifestActionMenu(stop, itineraryCode)
 
 		default:
 			return "END Invalid selection. Please dial *384*95853# and choose 1 or 2."
@@ -401,4 +409,11 @@ func HandleUSSD(ctx context.Context, req USSDRequest, provider GuestManifestProv
 	}
 
 	return "END Invalid input. Please dial *384*95853# to start again."
+}
+
+func manifestActionMenu(stop *StopRecord, itineraryCode string) string {
+	return fmt.Sprintf(
+		"CON Manifest verified for %s (%s).\n%d guest(s) arriving %s.\n1. View Full Kitchen Manifest\n2. Confirm Manifest Receipt",
+		stop.LodgeName, itineraryCode, stop.GuestCount, stop.CheckInDate,
+	)
 }

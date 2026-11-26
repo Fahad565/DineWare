@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -14,6 +15,7 @@ type dispatcherTestRepository struct {
 	notified bool
 	queries  int
 	marks    int
+	markErr  error
 }
 
 func (r *dispatcherTestRepository) QueryPendingStops(_ context.Context, _ time.Duration) ([]PendingStop, error) {
@@ -28,6 +30,9 @@ func (r *dispatcherTestRepository) MarkNotificationSent(_ context.Context, stopI
 	r.marks++
 	if stopID != r.stop.StopID {
 		return fmt.Errorf("unexpected stop ID %d", stopID)
+	}
+	if r.markErr != nil {
+		return r.markErr
 	}
 	r.notified = true
 	return nil
@@ -50,6 +55,7 @@ func TestDispatchDueStopsSendsEachStopOnlyOnce(t *testing.T) {
 			CheckInDate: time.Now().Add(24 * time.Hour).Format("2006-01-02"),
 			GuestCount:  2,
 		},
+		markErr: errors.New("simulated database lag"),
 	}
 	sms := &dispatcherTestSMSSender{}
 	dispatcher := NewDispatcher(repo, sms, log.New(io.Discard, "", 0))
@@ -66,7 +72,7 @@ func TestDispatchDueStopsSendsEachStopOnlyOnce(t *testing.T) {
 	if repo.queries != 2 {
 		t.Errorf("expected the repository to be queried twice, got %d", repo.queries)
 	}
-	if repo.marks != 1 {
-		t.Errorf("expected stop notification to be marked once, got %d", repo.marks)
+	if repo.marks != 2 {
+		t.Errorf("expected notification persistence to be retried on both cycles, got %d attempts", repo.marks)
 	}
 }

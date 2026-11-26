@@ -176,9 +176,12 @@ func TestSendSMSRejectsRecipientEvenWhenHTTPIsCreated(t *testing.T) {
 
 // stubProvider implements GuestManifestProvider for USSD state machine tests.
 type stubProvider struct {
-	stop       *integrations.StopRecord
-	guests     []integrations.GuestRecord
-	confirmErr error
+	stop                   *integrations.StopRecord
+	guests                 []integrations.GuestRecord
+	confirmErr             error
+	confirmCalls           int
+	confirmedItineraryCode string
+	confirmedPhone         string
 }
 
 func (s *stubProvider) GetStopByItineraryAndPhone(_ context.Context, itinID, phone string) (*integrations.StopRecord, error) {
@@ -192,7 +195,10 @@ func (s *stubProvider) GetGuestsByItinerary(_ context.Context, _ string) ([]inte
 	return s.guests, nil
 }
 
-func (s *stubProvider) ConfirmManifest(_ context.Context, _, _ string) error {
+func (s *stubProvider) ConfirmManifest(_ context.Context, itineraryCode, phone string) error {
+	s.confirmCalls++
+	s.confirmedItineraryCode = itineraryCode
+	s.confirmedPhone = phone
 	return s.confirmErr
 }
 
@@ -265,7 +271,7 @@ func TestUSSDLevel1InvalidCode(t *testing.T) {
 }
 
 // TestUSSDLevel2Option1ViewManifest verifies that menu option 1 returns the
-// full allergy manifest ONLY inside the authenticated USSD session (END).
+// full allergy manifest and keeps the authenticated USSD session open.
 func TestUSSDLevel2Option1ViewManifest(t *testing.T) {
 	t.Parallel()
 	req := integrations.USSDRequest{
@@ -273,15 +279,60 @@ func TestUSSDLevel2Option1ViewManifest(t *testing.T) {
 		Text: "ITIN-2026-001*1",
 	}
 	resp := integrations.HandleUSSD(context.Background(), req, makeStub())
-	if !strings.HasPrefix(resp, "END") {
-		t.Errorf("expected END after viewing manifest, got: %s", resp)
+	if !strings.HasPrefix(resp, "CON ") {
+		t.Errorf("expected CON after viewing manifest, got: %s", resp)
 	}
-	// Allergy data IS allowed inside the authenticated USSD END response
+	// Allergy data IS allowed inside the authenticated USSD response.
 	if !strings.Contains(resp, "Alice Smith") {
 		t.Errorf("manifest response missing guest name: %s", resp)
 	}
 	if !strings.Contains(strings.ToLower(resp), "peanut") {
 		t.Errorf("manifest response missing allergy data: %s", resp)
+	}
+	for _, prompt := range []string{"1. Confirm Manifest Receipt", "0. Back to Menu"} {
+		if !strings.Contains(resp, prompt) {
+			t.Errorf("manifest response missing follow-up prompt %q: %s", prompt, resp)
+		}
+	}
+}
+
+func TestUSSDLevel3Option1ConfirmsManifest(t *testing.T) {
+	t.Parallel()
+	provider := makeStub()
+	req := integrations.USSDRequest{
+		SessionID: "AT-SID-001", ServiceCode: "*384*95853#", PhoneNumber: "+254711000001",
+		Text: "ITIN-2026-001*1*1",
+	}
+
+	resp := integrations.HandleUSSD(context.Background(), req, provider)
+	const want = "END Confirmed. Manifest receipt logged for your lodge. Safe travels!"
+	if resp != want {
+		t.Errorf("expected confirmation response %q, got %q", want, resp)
+	}
+	if provider.confirmCalls != 1 {
+		t.Errorf("expected manifest confirmation once, got %d calls", provider.confirmCalls)
+	}
+	if provider.confirmedItineraryCode != "ITIN-2026-001" || provider.confirmedPhone != "+254711000001" {
+		t.Errorf("confirmation used unexpected itinerary/phone: %q, %q",
+			provider.confirmedItineraryCode, provider.confirmedPhone)
+	}
+}
+
+func TestUSSDLevel3Option0ReturnsToMenu(t *testing.T) {
+	t.Parallel()
+	req := integrations.USSDRequest{
+		SessionID: "AT-SID-001", ServiceCode: "*384*95853#", PhoneNumber: "+254711000001",
+		Text: "ITIN-2026-001*1*0",
+	}
+
+	resp := integrations.HandleUSSD(context.Background(), req, makeStub())
+	if !strings.HasPrefix(resp, "CON ") {
+		t.Errorf("expected CON when returning to menu, got: %s", resp)
+	}
+	for _, option := range []string{"1. View Full Kitchen Manifest", "2. Confirm Manifest Receipt"} {
+		if !strings.Contains(resp, option) {
+			t.Errorf("menu response missing option %q: %s", option, resp)
+		}
 	}
 }
 
@@ -289,16 +340,20 @@ func TestUSSDLevel2Option1ViewManifest(t *testing.T) {
 // chef_confirmed and returns a success END response.
 func TestUSSDLevel2Option2ConfirmManifest(t *testing.T) {
 	t.Parallel()
+	provider := makeStub()
 	req := integrations.USSDRequest{
 		SessionID: "AT-SID-001", ServiceCode: "*384*95853#", PhoneNumber: "+254711000001",
 		Text: "ITIN-2026-001*2",
 	}
-	resp := integrations.HandleUSSD(context.Background(), req, makeStub())
+	resp := integrations.HandleUSSD(context.Background(), req, provider)
 	if !strings.HasPrefix(resp, "END") {
 		t.Errorf("expected END after confirming manifest, got: %s", resp)
 	}
 	if !strings.Contains(strings.ToLower(resp), "confirm") {
 		t.Errorf("confirmation response should mention confirmation, got: %s", resp)
+	}
+	if provider.confirmCalls != 1 {
+		t.Errorf("expected direct option 2 to confirm once, got %d calls", provider.confirmCalls)
 	}
 }
 

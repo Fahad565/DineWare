@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"sync"
 	"time"
 
 	"dineware-backend/integrations"
@@ -57,6 +58,7 @@ type Dispatcher struct {
 	sms     SMSSender
 	logger  *log.Logger
 	runLock chan struct{}
+	sent    sync.Map
 }
 
 // NewDispatcher constructs a Dispatcher with the given dependencies.
@@ -131,12 +133,22 @@ func (d *Dispatcher) DispatchDueStops(ctx context.Context) error {
 			continue
 		}
 
+		dedupeKey := fmt.Sprintf("%d:%s", stop.StopID, stop.CheckInDate)
+		if _, alreadySent := d.sent.Load(dedupeKey); alreadySent {
+			d.logger.Printf("dispatcher: skipping already-sent stop %d (check-in=%s)", stop.StopID, stop.CheckInDate)
+			if err := d.repo.MarkNotificationSent(ctx, stop.StopID); err != nil {
+				d.logger.Printf("dispatcher: failed to mark previously sent stop %d as sent: %v", stop.StopID, err)
+			}
+			continue
+		}
+
 		if err := d.sms.SendSMS(ctx, stop.ChefPhone, stop.ItineraryID, stop.GroupName, stop.GuestCount, stop.CheckInDate); err != nil {
 			d.logger.Printf("dispatcher: SMS failed for stop %d (phone=%s): %v", stop.StopID, stop.ChefPhone, err)
 			failed++
 			continue
 		}
 
+		d.sent.Store(dedupeKey, struct{}{})
 		if err := d.repo.MarkNotificationSent(ctx, stop.StopID); err != nil {
 			d.logger.Printf("dispatcher: failed to mark stop %d as sent: %v", stop.StopID, err)
 			// Not fatal — the SMS was delivered; we'll retry marking on the next cycle
