@@ -128,6 +128,16 @@ func TestSendSMSCallsATEndpoint(t *testing.T) {
 		t.Errorf("expected from field to be omitted, got %v", capturedFrom)
 	}
 
+	const wantMessage = "DineWare Alert: Group 'Smith Safari' (Ref: ITIN-2026-001) — 4 guest(s) arriving 2026-12-01. Dial *384*95853# on your GSM phone to view the full manifest securely."
+	if capturedBody != wantMessage {
+		t.Errorf("unexpected SMS message:\n got: %q\nwant: %q", capturedBody, wantMessage)
+	}
+	for _, excluded := range []string{"http://", "https://", "Web portal:"} {
+		if strings.Contains(capturedBody, excluded) {
+			t.Errorf("SMS payload must not include portal links (%q): %s", excluded, capturedBody)
+		}
+	}
+
 	lower := strings.ToLower(capturedBody)
 	for _, kw := range []string{"allerg", "peanut", "gluten", "shellfish", "dietary", "health"} {
 		if strings.Contains(lower, kw) {

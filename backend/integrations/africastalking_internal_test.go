@@ -68,7 +68,7 @@ func TestNewATClientSelectsSandboxEndpointCaseInsensitively(t *testing.T) {
 	}
 }
 
-func TestATClientConfiguredSenderAndMessageLinks(t *testing.T) {
+func TestATClientConfiguredSenderAndUSSDOnlyMessage(t *testing.T) {
 	var capturedFrom, capturedMessage string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {
@@ -95,8 +95,10 @@ func TestATClientConfiguredSenderAndMessageLinks(t *testing.T) {
 	if !strings.Contains(capturedMessage, "Dial *123#") {
 		t.Errorf("expected configured USSD code in message, got %q", capturedMessage)
 	}
-	if !strings.Contains(capturedMessage, "https://portal.example.test/manifest") {
-		t.Errorf("expected configured portal link in message, got %q", capturedMessage)
+	for _, excluded := range []string{"http://", "https://", "Web portal:"} {
+		if strings.Contains(capturedMessage, excluded) {
+			t.Errorf("SMS message must not include portal links (%q): %q", excluded, capturedMessage)
+		}
 	}
 }
 
@@ -118,7 +120,8 @@ func TestBuildPrivacySafeSMSUsesDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("build SMS: %v", err)
 	}
-	if !strings.Contains(message, defaultUSSDCode) || !strings.Contains(message, defaultPortalURL+"/manifest") {
-		t.Errorf("default links missing from message: %q", message)
+	const want = "DineWare Alert: Group 'Safari' (Ref: ITIN-1) — 2 guest(s) arriving 2026-12-01. Dial *384*95853# on your GSM phone to view the full manifest securely."
+	if message != want {
+		t.Errorf("unexpected SMS message:\n got: %q\nwant: %q", message, want)
 	}
 }

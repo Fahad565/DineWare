@@ -21,7 +21,6 @@ import (
 const smsBaseURL = "https://api.africastalking.com/version1/messaging"
 const smsSandboxBaseURL = "https://api.sandbox.africastalking.com/version1/messaging"
 const defaultUSSDCode = "*384*95853#"
-const defaultPortalURL = "https://dineware-operator-portal.onrender.com"
 
 // ATConfig contains Africa's Talking credentials and message configuration.
 type ATConfig struct {
@@ -30,7 +29,7 @@ type ATConfig struct {
 	APIKey      string
 	SenderID    string
 	USSDCode    string
-	PortalURL   string
+	PortalURL   string // Retained for configuration compatibility; SMS uses the USSD workflow only.
 }
 
 func normalizeATUsername(username string) string {
@@ -72,7 +71,6 @@ type ATClient struct {
 	apiKey     string
 	senderID   string
 	ussdCode   string
-	portalURL  string
 	httpClient *http.Client
 	baseURL    string // overridable in tests
 }
@@ -95,16 +93,11 @@ func NewATClientWithConfig(config ATConfig) *ATClient {
 	if ussdCode == "" {
 		ussdCode = defaultUSSDCode
 	}
-	portalURL := strings.TrimRight(strings.TrimSpace(config.PortalURL), "/")
-	if portalURL == "" {
-		portalURL = defaultPortalURL
-	}
 	return &ATClient{
 		username:   username,
 		apiKey:     strings.TrimSpace(config.APIKey),
 		senderID:   strings.TrimSpace(config.SenderID),
 		ussdCode:   ussdCode,
-		portalURL:  portalURL,
 		baseURL:    baseURL,
 		httpClient: &http.Client{Timeout: 10 * time.Second},
 	}
@@ -117,7 +110,6 @@ func NewATClientWithBaseURL(username, apiKey, baseURL string) *ATClient {
 		username:   normalizeATUsername(username),
 		apiKey:     strings.TrimSpace(apiKey),
 		ussdCode:   defaultUSSDCode,
-		portalURL:  defaultPortalURL,
 		baseURL:    baseURL,
 		httpClient: &http.Client{Timeout: 10 * time.Second},
 	}
@@ -129,34 +121,25 @@ func NewATClientWithBaseURL(username, apiKey, baseURL string) *ATClient {
 //   - Property-specific itinerary reference code.
 //   - Number of arriving guests.
 //   - Scheduled arrival date.
-//   - A prompt to retrieve the full manifest via the configured USSD code or portal.
+//   - A prompt to retrieve the full manifest via the configured USSD code.
 //
 // No allergy, dietary, or health information is included.
 func BuildPrivacySafeSMS(itineraryID, groupName string, guestCount int, arrivalDate string) (string, error) {
-	return BuildPrivacySafeSMSWithConfig(itineraryID, groupName, guestCount, arrivalDate, defaultUSSDCode, defaultPortalURL)
+	return BuildPrivacySafeSMSWithConfig(itineraryID, groupName, guestCount, arrivalDate, defaultUSSDCode, "")
 }
 
-// BuildPrivacySafeSMSWithConfig constructs a privacy-safe message with configured
-// access instructions and portal URL.
-func BuildPrivacySafeSMSWithConfig(itineraryID, groupName string, guestCount int, arrivalDate, ussdCode, portalURL string) (string, error) {
+// BuildPrivacySafeSMSWithConfig constructs a privacy-safe message with a configured USSD code.
+// portalURL is retained for compatibility but is intentionally omitted from the SMS.
+func BuildPrivacySafeSMSWithConfig(itineraryID, groupName string, guestCount int, arrivalDate, ussdCode, _ string) (string, error) {
 	ussdCode = strings.TrimSpace(ussdCode)
 	if ussdCode == "" {
 		ussdCode = defaultUSSDCode
 	}
-	portalURL = strings.TrimRight(strings.TrimSpace(portalURL), "/")
-	if portalURL == "" {
-		portalURL = defaultPortalURL
-	}
-	portalLink := portalURL
-	if !strings.HasSuffix(strings.ToLower(portalLink), "/manifest") {
-		portalLink += "/manifest"
-	}
 
 	msg := fmt.Sprintf(
 		"DineWare Alert: Group '%s' (Ref: %s) — %d guest(s) arriving %s. "+
-			"Dial %s on your GSM phone to view the full manifest securely. "+
-			"Web portal: %s",
-		groupName, itineraryID, guestCount, arrivalDate, ussdCode, portalLink,
+			"Dial %s on your GSM phone to view the full manifest securely.",
+		groupName, itineraryID, guestCount, arrivalDate, ussdCode,
 	)
 
 	// Safety belt: enforce zero leakage of sensitive terms
@@ -189,7 +172,7 @@ func assertNoSensitiveData(payload string) error {
 //   - arrivalDate: formatted arrival date string (YYYY-MM-DD).
 func (c *ATClient) SendSMS(ctx context.Context, to, itineraryID, groupName string, guestCount int, arrivalDate string) error {
 	msg, err := BuildPrivacySafeSMSWithConfig(
-		itineraryID, groupName, guestCount, arrivalDate, c.ussdCode, c.portalURL,
+		itineraryID, groupName, guestCount, arrivalDate, c.ussdCode, "",
 	)
 	if err != nil {
 		return err
